@@ -1,0 +1,13 @@
+{
+  "name": "seeing-data-course",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An interactive introduction to data visualization",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": { "node": ">=20" }
+}

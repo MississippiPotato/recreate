@@ -1,0 +1,7 @@
+dist/
+node_modules/
+output/
+.playwright-cli/
+.env*
+*.log
+.openai/
