@@ -132,6 +132,11 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
     const openDetails=[...host.querySelectorAll('details[open]')].map(el=>el.querySelector('summary')?.textContent);
     host.replaceChildren();host.classList.toggle('has-comparison',!!baseline);
     const toolbar=document.createElement('div');toolbar.className='experiment-controls';controls(toolbar);host.append(toolbar);
+    if(baseline&&baseline.context!==state.context) {
+      const note=document.createElement('p');note.className='chart-status comparison-note';
+      note.textContent=L('A 与 B 的数据情境不同，差异不能只归因于色板。重新保留 A，可在相同数据下比较。','A and B use different data contexts, so differences cannot be attributed to palette alone. Save A again to compare within one context.');
+      host.append(note);
+    }
     const charts=document.createElement('div');charts.className=baseline?'chart-pair':'chart-single';host.append(charts);
     const renderOne=(params,readonly,heading)=>{
       const pane=document.createElement('div');pane.className='chart-pane';
