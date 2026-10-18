@@ -215,14 +215,22 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
       const values=p.context==='category'?[20,20,20,20,20,20]:p.context==='deviation'?[-25,-12,-4,5,15,27]:[-3,5,12,19,26,33];
       const scale=paletteScale(p.palette,values),g=svg(parent,L('配色与数据语义比较','Palette and data semantics'),290);
       values.forEach((v,i)=>{
-        const color=simulateVision(scale(p.palette==='categorical'?i:v),p.vision);
+        // Deliberate ordinal-to-continuous misuse: the darkening comes from
+        // category order, not a quantitative difference between the colleges.
+        const colorValue=p.palette==='categorical'?i:p.context==='category'?(p.palette==='diverging'?-30+i*60/(values.length-1):-5+i*40/(values.length-1)):v;
+        const color=simulateVision(scale(colorValue),p.vision);
         const group=g.append('g').attr('transform',`translate(${35+i*94},40)`);
         group.append('rect').attr('width',80).attr('height',145).attr('rx',3).attr('fill',color);
         text(group,40,174,p.context==='category'?String.fromCharCode(65+i):`D${i+1}`,13,'#68706e','middle');
         if(p.labels) {group.append('rect').attr('x',12).attr('y',50).attr('width',56).attr('height',36).attr('fill','#fff').attr('opacity',.88).attr('rx',2);text(group,40,74,p.context==='category'?String.fromCharCode(65+i):`${v}${p.context==='temperature'?'°C':''}`,18,'#25313a','middle');}
       });
       if(p.palette!=='categorical')for(let i=0;i<100;i++)g.append('rect').attr('x',130+i*3.4).attr('y',245).attr('width',3.5).attr('height',9).attr('fill',simulateVision(scale(p.palette==='diverging'?-30+i*.6:-5+i*.4),p.vision));
-      if(p.palette!=='categorical'){text(g,130,275,p.palette==='diverging'?'-30':'−5',11);text(g,470,275,p.palette==='diverging'?'+30':'35°C',11,'#68706e','end');if(p.palette==='diverging')text(g,300,275,'0',11,'#68706e','middle');}
+      if(p.palette!=='categorical'){
+        const suffix=p.context==='temperature'?'°C':'';
+        text(g,130,275,p.context==='category'?'A':(p.palette==='diverging'?'−30':'−5')+suffix,11);
+        text(g,470,275,p.context==='category'?'F':(p.palette==='diverging'?'+30':'35')+suffix,11,'#68706e','end');
+        if(p.palette==='diverging'&&p.context!=='category')text(g,300,275,'0'+suffix,11,'#68706e','middle');
+      }
       const expected={category:'categorical',temperature:'sequential',deviation:'diverging'}[p.context];
       status(parent,p.palette===expected?L('当前色板与本例语义相符。继续检查图例、数值与观看条件。','The palette fits this example’s semantics. Still inspect its legend, values and viewing conditions.'):L('观察：这套颜色可能暗示了不合适的顺序或中心。请结合数据语义解释。','Observe: this palette may imply an unsuitable order or center. Explain using the data semantics.'));
       if(p.vision==='cvd')status(parent,L('绿色觉缺陷近似预览 · 线性 RGB 矩阵 · 不是个体诊断或无障碍认证','Approximate deuteranopia preview · linear RGB matrix · not an individual diagnosis or accessibility certification'));
