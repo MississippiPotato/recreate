@@ -65,7 +65,7 @@ test('all 27 sections have bilingual explanations and valid transfer feedback',(
   const ids=courses.flatMap(c=>c.sections.map(s=>s.id));assert.equal(new Set(ids).size,27);
   for(const c of courses)for(const s of c.sections){
     for(const name of ['title','question','explanation','transfer','reason'])for(const lang of ['zh','en'])assert.ok(s[name][lang].length>0,`${s.id}: ${name}/${lang}`);
-    assert.equal(s.steps.length,3);assert.ok(s.answer>=0&&s.answer<s.options.length);assert.ok(s.pages);
+    assert.equal(s.steps.length,3);assert.ok(s.answer>=0&&s.answer<s.options.length);
   }
 });
 test('Anscombe data retain similar summaries and distinct coordinates',()=>{

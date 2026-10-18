@@ -1,6 +1,6 @@
 import * as calc from './core.js';
 import { t } from './content.js';
-const colors = ['#376578','#ae5138','#738368','#b48b42','#82729b','#5a9691','#be7f81','#77766b'];
+const colors = ['#6554ca','#bc6655','#478b85','#ab8435','#9074b8','#448fa0','#ba7190','#737691'];
 const label = (zh,en,lang) => lang === 'zh' ? zh : en;
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 const majorName = (name,lang) => lang === 'zh' ? ({Design:'设计',Computing:'计算机',Economics:'经济',Biology:'生物'}[name] || name) : name;
@@ -45,7 +45,7 @@ export function simulateVision(color, mode) {
 }
 function defaults(section) {
   return {operation:'all',threshold:75,selected:'S001',field:'major',semantic:'id',next:'B,C,D',joined:false,
-    stage:0,orientation:'horizontal',collapsed:[],node:'Design',context:'temperature',palette:'sequential',vision:'original',labels:true,
+    stage:0,orientation:'horizontal',collapsed:[],node:'Design',context:section.kind==='palette'?'category':'temperature',palette:'sequential',vision:'original',labels:true,
     hue:205,lightness:55,saturation:55,count:5,harmony:'analogous',layout:'wide',cellKey:'A:income',scale:'linear',curve:'linear',height:230,
     iso:50,cell:14,corners:null,show:0,view:section.id==='5.3'?'calendar':'line',day:181,period:14,revealed:false,character:0,event:0};
 }
@@ -132,6 +132,7 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
     const openDetails=[...host.querySelectorAll('details[open]')].map(el=>el.querySelector('summary')?.textContent);
     host.replaceChildren();host.classList.toggle('has-comparison',!!baseline);
     const toolbar=document.createElement('div');toolbar.className='experiment-controls';controls(toolbar);host.append(toolbar);
+    const scrollHint=document.createElement('p');scrollHint.className='chart-scroll-hint';scrollHint.textContent=L('图形可左右拖动查看 ↔','Scroll the chart sideways to explore ↔');host.append(scrollHint);
     if(baseline&&baseline.context!==state.context) {
       const note=document.createElement('p');note.className='chart-status comparison-note';
       note.textContent=L('A 与 B 的数据情境不同，差异不能只归因于色板。重新保留 A，可在相同数据下比较。','A and B use different data contexts, so differences cannot be attributed to palette alone. Save A again to compare within one context.');
@@ -160,7 +161,10 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
   function rowsTable(parent,rows,params,readonly=false) {
     const wrap=document.createElement('div');wrap.className='data-table';
     wrap.innerHTML=`<table><caption>${L('点击编号，追踪同一记录','Select an ID to follow a record')}</caption><thead><tr><th>ID</th><th>${L('专业','Major')}</th><th>${L('班级','Class')}</th><th>${L('成绩','Score')}</th></tr></thead><tbody>${rows.map(r=>`<tr class="${r.id===params.selected?'selected-row':''}"><td><button data-id="${r.id}" ${readonly?'disabled':''}>${r.id}</button></td><td>${majorName(r.major,lang)}</td><td>${r.class}</td><td>${r.score}</td></tr>`).join('')}</tbody></table>`;
-    wrap.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>update('selected',b.dataset.id));parent.append(wrap);
+    wrap.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>update('selected',b.dataset.id));
+    const details=document.createElement('details');details.className='record-details';
+    const summary=document.createElement('summary');summary.textContent=L('查看表格，追踪记录','Open the table and trace records');
+    details.append(summary,wrap);parent.append(details);
   }
   function draw(parent,p,readonly) {
     const d3=window.d3,k=section.kind;
@@ -276,7 +280,11 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
     status(parent,`${L('总人数始终为','Total remains')} <strong>80</strong> · ${L('当前选择','Selected')}: ${majorName(p.node,lang)}${matched?` · ${matched.data.count}`:L('（已折叠隐藏，选择仍保留）',' (hidden by collapse; selection retained)')}${section.kind==='pipeline'?` · ${L('追踪记录','Following')}: ${p.selected}`:''}`);
   }
   function drawContour(parent,p,readonly) {
-    const field=calc.makeField(),size=7,g=svg(parent,L('网格标量场与单元格推导','Scalar grid and cell construction'),350);
+    const field=calc.makeField();
+    const pair=document.createElement('div');pair.className='contour-grid';
+    const fieldPane=document.createElement('div'),cellPane=document.createElement('div');pair.append(fieldPane,cellPane);parent.append(pair);
+    const g=svg(fieldPane,L('网格标量场','Scalar grid'),320).attr('viewBox','0 0 300 320');
+    const h=svg(cellPane,L('选中单元格的推导','Selected cell construction'),350).attr('viewBox','0 0 300 350');
     const x0=20,y0=35,cellSize=36;
     const fill=window.d3.scaleSequential(window.d3.interpolateYlGnBu).domain([10,90]);
     for(let y=0;y<6;y++)for(let x=0;x<6;x++){
@@ -287,13 +295,13 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
     }
     const cy=Math.floor(p.cell/6),cx=p.cell%6;
     const vals=p.corners||[field[cy][cx],field[cy][cx+1],field[cy+1][cx+1],field[cy+1][cx]],result=calc.marchingCell(vals,p.iso);
-    const pts=[[340,65],[530,65],[530,255],[340,255]],map=pt=>[340+pt[0]*190,65+pt[1]*190];
-    g.append('rect').attr('x',340).attr('y',65).attr('width',190).attr('height',190).attr('fill','#edf2fa').attr('stroke','#bdc2b8');
-    pts.forEach(([x,y],i)=>{g.append('circle').attr('cx',x).attr('cy',y).attr('r',15).attr('fill',Number(p.show)>0?(result.high[i]?'#376578':'#c4c5ba'):'#fff').attr('stroke','#376578');text(g,x,y+5,Number(p.show)>0?+result.high[i]:vals[i],12,Number(p.show)>0&&result.high[i]?'#fff':'#25313a','middle');text(g,x,y+(i<2?-25:33),`v${i} = ${vals[i]}`,12,'#68706e','middle');});
-    if(Number(p.show)>=2)result.crossings.forEach(c=>{const [x,y]=map(c.point);g.append('circle').attr('cx',x).attr('cy',y).attr('r',5).attr('fill','#a74732');});
-    if(Number(p.show)>=3)result.segments.forEach(seg=>g.append('path').attr('d',window.d3.line()(seg.map(map))).attr('fill','none').attr('stroke','#a74732').attr('stroke-width',3));
-    text(g,125,287,L(`场中网格 ${p.cell+1}`,`Field cell ${p.cell+1}`),12,'#68706e','middle');text(g,435,325,`case ${result.code} · ${result.high.map(Number).join(' / ')}`,14,'#376578','middle');
-    status(parent,`${p.corners?L('独立状态示例；左侧仍为原始场','Independent case example; left remains the original field'):L('右侧放大左侧选中网格','Right: selected cell enlarged')} · ${L('跨越边','Crossing edges')}: ${result.crossings.map(c=>`e${c.edge}: t=${c.t.toFixed(2)}`).join(' · ')||'∅'}${result.ambiguous?` · ${L('歧义判别','Ambiguity decider')} Q=${result.q}${result.q===0?L('（精确鞍点，采用固定连接）',' (exact saddle; fixed tie)'):''}`:''}`);
+    const pts=[[40,65],[230,65],[230,255],[40,255]],map=pt=>[40+pt[0]*190,65+pt[1]*190];
+    h.append('rect').attr('x',40).attr('y',65).attr('width',190).attr('height',190).attr('fill','#edf2fa').attr('stroke','#bdc2b8');
+    pts.forEach(([x,y],i)=>{h.append('circle').attr('cx',x).attr('cy',y).attr('r',15).attr('fill',Number(p.show)>0?(result.high[i]?'#376578':'#c4c5ba'):'#fff').attr('stroke','#376578');text(h,x,y+5,Number(p.show)>0?+result.high[i]:vals[i],12,Number(p.show)>0&&result.high[i]?'#fff':'#25313a','middle');text(h,x,y+(i<2?-25:33),`v${i} = ${vals[i]}`,12,'#68706e','middle');});
+    if(Number(p.show)>=2)result.crossings.forEach(c=>{const [x,y]=map(c.point);h.append('circle').attr('cx',x).attr('cy',y).attr('r',5).attr('fill','#a74732');});
+    if(Number(p.show)>=3)result.segments.forEach(seg=>h.append('path').attr('d',window.d3.line()(seg.map(map))).attr('fill','none').attr('stroke','#a74732').attr('stroke-width',3));
+    text(g,125,287,L(`场中网格 ${p.cell+1}`,`Field cell ${p.cell+1}`),12,'#68706e','middle');text(h,135,325,`case ${result.code} · ${result.high.map(Number).join(' / ')}`,14,'#376578','middle');
+    status(parent,`${p.corners?L('独立状态示例；标量场保持原样','Independent case example; field unchanged'):L('选中网格的放大推导','Construction of the selected cell')} · ${L('跨越边','Crossing edges')}: ${result.crossings.map(c=>`e${c.edge}: t=${c.t.toFixed(2)}`).join(' · ')||'∅'}${result.ambiguous?` · ${L('歧义判别','Ambiguity decider')} Q=${result.q}${result.q===0?L('（精确鞍点，采用固定连接）',' (exact saddle; fixed tie)'):''}`:''}`);
   }
   function drawTime(parent,p,readonly) {
     const d3=window.d3,data=calc.daily,selected=data[p.day],color=d3.scaleSequential(d3.interpolateYlGnBu).domain([-5,35]);
@@ -322,6 +330,7 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
   render();
   return {
     reset:()=>{state=defaults(section);baseline=null;render();},
+    applyPreset:value=>{state={...state,...structuredClone(value)};render();onChange();},
     setStep:value=>{stage=value;if(section.kind==='contour'){state.show=[0,2,3][value];render();}},
     getState:()=>structuredClone({state,baseline,stage}),
     restore:value=>{if(value){state={...defaults(section),...value.state};baseline=value.baseline;stage=value.stage||0;render();}},
