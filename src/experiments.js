@@ -1,6 +1,6 @@
 import * as calc from './core.js';
 import { t } from './content.js';
-const colors = ['#6554ca','#bc6655','#478b85','#ab8435','#9074b8','#448fa0','#ba7190','#737691'];
+const colors = ['#284f63','#cb4935','#718d7c','#bb963f','#816d8b','#428e98','#b46e80','#757d71'];
 const label = (zh,en,lang) => lang === 'zh' ? zh : en;
 const esc = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 const majorName = (name,lang) => lang === 'zh' ? ({Design:'设计',Computing:'计算机',Economics:'经济',Biology:'生物'}[name] || name) : name;

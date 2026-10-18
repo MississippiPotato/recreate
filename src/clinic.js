@@ -30,8 +30,8 @@ export function mountClinic(host,{L,arrow,classroom=false}){
   function bars(id,start){
     const g=canvas(id,L(`80 和 84，纵轴从 ${start} 开始`,`80 and 84, axis starts at ${start}`)),y=d3.scaleLinear([start,90],[270,25]);
     g.append('g').attr('transform','translate(65,0)').call(d3.axisLeft(y).ticks(5).tickSize(-390)).selectAll('.tick line').attr('stroke','#e5e7f0');
-    g.selectAll('.domain').remove();g.selectAll('.tick text').attr('font-size',15).attr('fill','#71758c');
-    clinicValues.forEach((value,i)=>{g.append('rect').attr('x',140+i*180).attr('y',y(value)).attr('width',78).attr('height',270-y(value)).attr('rx',5).attr('fill',i?'#6f5ce5':'#b9adef');g.append('text').attr('x',179+i*180).attr('y',y(value)-12).attr('text-anchor','middle').attr('font-size',24).attr('font-weight',600).attr('fill','#292b43').text(value);g.append('text').attr('x',179+i*180).attr('y',302).attr('text-anchor','middle').attr('font-size',16).attr('fill','#71758c').text(i?'B':'A');});
+    g.selectAll('.domain').remove();g.selectAll('.tick text').attr('font-size',15).attr('fill','#667378');
+    clinicValues.forEach((value,i)=>{g.append('rect').attr('x',140+i*180).attr('y',y(value)).attr('width',78).attr('height',270-y(value)).attr('rx',5).attr('fill',i?'#c44834':'#819a99');g.append('text').attr('x',179+i*180).attr('y',y(value)-12).attr('text-anchor','middle').attr('font-size',24).attr('font-weight',600).attr('fill','#202c30').text(value);g.append('text').attr('x',179+i*180).attr('y',302).attr('text-anchor','middle').attr('font-size',16).attr('fill','#667378').text(i?'B':'A');});
     if(start)g.append('text').attr('x',65).attr('y',320).attr('font-size',14).attr('fill','#a14a3b').text(L(`注意：纵轴起点为 ${start}`,`Axis starts at ${start}`));
   }
   function colors(id,type){
@@ -41,13 +41,13 @@ export function mountClinic(host,{L,arrow,classroom=false}){
   }
   function temperatures(id,mode){
     const g=canvas(id,L('七天合成气温，第 3 天缺失','Seven synthetic temperatures, day 3 missing')),x=d3.scaleLinear([0,6],[60,465]),y=d3.scaleLinear([0,26],[265,28]);
-    g.append('g').attr('transform','translate(0,265)').call(d3.axisBottom(x).ticks(7).tickFormat(v=>v+1));g.append('g').attr('transform','translate(60,0)').call(d3.axisLeft(y).ticks(5).tickSize(-405));g.selectAll('.tick line').attr('stroke','#e5e7f0');g.selectAll('.domain').attr('stroke','#ccd0df');g.selectAll('.tick text').attr('font-size',15).attr('fill','#71758c');
+    g.append('g').attr('transform','translate(0,265)').call(d3.axisBottom(x).ticks(7).tickFormat(v=>v+1));g.append('g').attr('transform','translate(60,0)').call(d3.axisLeft(y).ticks(5).tickSize(-405));g.selectAll('.tick line').attr('stroke','#e5e7f0');g.selectAll('.domain').attr('stroke','#ccd0df');g.selectAll('.tick text').attr('font-size',15).attr('fill','#667378');
     const values=repairMissing(clinicTemperatures,mode),points=values.map((value,i)=>({value,i}));
     const line=d3.line().defined(d=>d.value!==null).x(d=>x(d.i)).y(d=>y(d.value));
-    g.append('path').attr('d',line(mode==='connect'?points.filter(d=>d.value!==null):points)).attr('fill','none').attr('stroke','#6f5ce5').attr('stroke-width',3);
-    points.filter(d=>d.value!==null).forEach(d=>g.append('circle').attr('cx',x(d.i)).attr('cy',y(d.value)).attr('r',5).attr('fill',d.i===2?'#bf5d49':'#6f5ce5'));
-    g.append('text').attr('x',465).attr('y',311).attr('text-anchor','end').attr('font-size',15).attr('fill','#71758c').text(L('第几天 →','Day →'));
-    if(mode==='gap'){g.append('line').attr('x1',x(2)).attr('x2',x(2)).attr('y1',44).attr('y2',255).attr('stroke','#9892b5').attr('stroke-dasharray','4 5');g.append('text').attr('x',x(2)).attr('y',28).attr('text-anchor','middle').attr('font-size',16).attr('fill','#71758c').text(L('未知','Unknown'));}
+    g.append('path').attr('d',line(mode==='connect'?points.filter(d=>d.value!==null):points)).attr('fill','none').attr('stroke','#c44834').attr('stroke-width',3);
+    points.filter(d=>d.value!==null).forEach(d=>g.append('circle').attr('cx',x(d.i)).attr('cy',y(d.value)).attr('r',5).attr('fill',d.i===2?'#bf5d49':'#c44834'));
+    g.append('text').attr('x',465).attr('y',311).attr('text-anchor','end').attr('font-size',15).attr('fill','#667378').text(L('第几天 →','Day →'));
+    if(mode==='gap'){g.append('line').attr('x1',x(2)).attr('x2',x(2)).attr('y1',44).attr('y2',255).attr('stroke','#9892b5').attr('stroke-dasharray','4 5');g.append('text').attr('x',x(2)).attr('y',28).attr('text-anchor','middle').attr('font-size',16).attr('fill','#667378').text(L('未知','Unknown'));}
   }
   function draw(){if(current===0){bars('#clinic-before',76);bars('#clinic-after',baseline);}else if(current===1){colors('#clinic-before','sequential');colors('#clinic-after',palette);}else{temperatures('#clinic-before','zero');temperatures('#clinic-after',missing);}}
   function explain(){

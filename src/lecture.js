@@ -8,12 +8,12 @@ export function mountLecture(ctx){
   const {app,L,T,esc,arrow,href,save,$,course,section,state,snapshot}=ctx;
   const all=courses.flatMap(c=>c.sections),index=all.indexOf(section),teaching=teachingFor(section),beats=lectureBeats(section);
   const phaseNames=[L('提问','Question'),L('演示','Demonstrate'),L('归纳','Explain'),L('追问','Discuss')];
-  state.beat??=-1;state.answerRevealed??=false;state.parametersOpen=false;state.showData=section.id==='1.2';
-  app.insertAdjacentHTML('beforeend',`<main id="main" class="lecture-page" data-phase="${state.phase}" data-kind="${section.kind}">
+  state.beat??=-1;state.answerRevealed??=false;state.parametersOpen=false;state.referenceOpen=false;state.showData=section.id==='1.2';
+  app.insertAdjacentHTML('beforeend',`<nav class="course-rail" aria-label="${L('切换课程','Switch lesson')}"><a class="rail-home" href="#path" aria-label="${L('课程全貌','Course overview')}">↖</a>${courses.map((c,i)=>`<a href="#lesson-${c.id}" ${course.id===c.id?'aria-current="page"':''}><b>0${c.id}</b><span>${L(['数据','流程','色彩','空间','时间'][i],['Data','Process','Color','Space','Time'][i])}</span></a>`).join('')}<span class="rail-caption">SEEING<br>DATA</span></nav><main id="main" class="lecture-page" data-course="${course.id}" data-phase="${state.phase}" data-kind="${section.kind}">
     <header class="lecture-heading"><div><p>${L('第','LESSON ')} ${course.id} ${L('课','')} · ${T(course.title)} <span>/ ${section.id}</span></p><h1>${T(section.title)}</h1></div><nav class="lecture-phases" aria-label="${L('课堂讲解步骤','Teaching stages')}">${phaseNames.map((name,i)=>`<button data-lecture-phase="${i}" aria-pressed="${state.phase===i}"><span>0${i+1}</span>${name}</button>`).join('')}</nav><span class="lecture-position">${String(index+1).padStart(2,'0')} <i>/ 27</i></span></header>
-    <section class="lecture-stage"><div class="lecture-visual"><div id="lecture-question-board" class="lecture-question-board"><span id="board-label"></span><h2 id="board-question"></h2><p id="board-invitation"></p></div><div class="lecture-figure"><div class="lecture-figure-top"><span>${L('教学构造示例','CONSTRUCTED TEACHING EXAMPLE')}</span><div><button id="lecture-data" hidden>${L('查看数据','Show data')}</button><button id="lecture-parameters">${L('调整参数','Parameters')} ⤢</button></div></div><div id="projection-experiment" class="projection-experiment"></div><div id="lecture-readout" class="lecture-readout" aria-live="polite"></div></div></div><aside class="lecture-side" id="lecture-side"></aside></section>
+    <section class="lecture-stage"><div class="lecture-visual"><div id="lecture-question-board" class="lecture-question-board"><span id="board-label"></span><h2 id="board-question"></h2><p id="board-invitation"></p><div class="board-footnote"><span>${course.word}</span><span>${section.id}</span><i></i></div></div><div class="lecture-figure"><div class="lecture-figure-top"><span>${L('教学构造示例','CONSTRUCTED EXAMPLE')}</span><div><button id="lecture-data" hidden>${L('查看数据','Data')}</button><button id="lecture-concept">${L('讲解','Concept')}</button><button id="lecture-code">${L('代码','Code')}</button><button id="lecture-parameters">${L('参数','Parameters')} ⤢</button></div></div><div id="projection-experiment" class="projection-experiment"></div><div id="lecture-readout" class="lecture-readout" aria-live="polite"></div></div></div><aside class="lecture-side" id="lecture-side"></aside></section>
     <footer class="lecture-controls"><div class="lecture-tools"><button id="lecture-restart" aria-label="${L('从当前小节重新讲解','Restart this section')}">↺ ${L('重新演示','Restart')}</button><button id="lecture-compare" hidden>${L('对照原图','Original view')}</button><button id="lecture-fullscreen">${L('全屏','Full screen')} ⤢</button><span class="lecture-key-hint">${L('← → 翻步 · F 全屏','← → to advance · F for full screen')}</span></div><div class="lecture-navigation"><button id="lecture-previous" aria-label="${L('上一步','Previous step')}">←</button><button class="primary" id="lecture-next"></button></div></footer>
-  </main><button class="lecture-parameters-shade" id="lecture-parameters-shade" tabindex="-1" aria-label="${L('关闭演示参数','Close demonstration parameters')}"></button>`);
+  </main><button class="lecture-parameters-shade" id="lecture-parameters-shade" tabindex="-1" aria-label="${L('关闭演示参数','Close demonstration parameters')}"></button><div id="lecture-reference-shade" class="reference-shade" hidden><section id="lecture-reference" class="lecture-reference" role="dialog" aria-modal="true" aria-labelledby="reference-title"><header><div><p>${section.id} / ${course.word}</p><h2 id="reference-title">${T(section.title)}</h2></div><button id="close-reference" aria-label="${L('回到演示','Back to demonstration')}">×</button></header><nav aria-label="${L('讲解与代码','Concept and code')}"><button data-reference="concept">${L('概念讲解','Concept')}</button><button data-reference="code">${L('实现代码','Implementation')}</button></nav><div id="reference-body"></div></section></div>`);
 
   let ready=false,comparing=false;
   const experiment=createExperiment($('#projection-experiment'),section,ctx.lang,()=>{if(ready)refreshFigure();});
@@ -46,6 +46,19 @@ export function mountLecture(ctx){
     $('.lecture-figure-top>span').textContent=comparing?L('原图 · 变化之前','ORIGINAL · BEFORE THE CHANGE'):L('教学构造示例','CONSTRUCTED TEACHING EXAMPLE');
   }
   function closeParameters(){state.parametersOpen=false;document.body.classList.remove('lecture-parameters-open');$('#lecture-parameters')?.focus({preventScroll:true});}
+  let referenceTrigger=null;
+  function closeReference(){state.referenceOpen=false;$('#lecture-reference-shade').hidden=true;referenceTrigger?.focus({preventScroll:true});}
+  function showReference(view){
+    closeParameters();state.referenceOpen=true;$('#lecture-reference-shade').hidden=false;
+    document.querySelectorAll('[data-reference]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.reference===view));
+    $('#reference-body').innerHTML=view==='concept'?`<div class="reference-concept"><p class="reference-insight">${T(teaching.insight)}</p><p>${T(section.explanation)}</p><div><span>${L('回到图形，留意这一点','LOOK BACK AT THE VIEW')}</span><p>${T(section.steps[1])}</p></div></div>`:`<p class="reference-code-note">${L('本实验实际使用的函数。辅助函数与 D3 在完整源码中；关闭后继续刚才的演示。','The function used by this experiment. Helpers and D3 are in the full source. Close to resume the same demonstration.')}</p><pre class="reference-code"><code>${esc(experiment.source())}</code></pre>`;
+    $('#close-reference').focus({preventScroll:true});
+  }
+  $('#lecture-concept').onclick=()=>{referenceTrigger=$('#lecture-concept');showReference('concept');};
+  $('#lecture-code').onclick=()=>{referenceTrigger=$('#lecture-code');showReference('code');};
+  document.querySelectorAll('[data-reference]').forEach(b=>b.onclick=()=>showReference(b.dataset.reference));
+  $('#close-reference').onclick=closeReference;
+  $('#lecture-reference-shade').onclick=e=>{if(e.target===$('#lecture-reference-shade'))closeReference();};
   function applyBeat(index){
     if(comparing){comparing=false;}
     experiment.restore(state.before);
@@ -77,11 +90,11 @@ export function mountLecture(ctx){
   function paint(){
     $('#main').dataset.phase=state.phase;
     document.querySelectorAll('[data-lecture-phase]').forEach(button=>button.setAttribute('aria-pressed',Number(button.dataset.lecturePhase)===state.phase));
-    $('#board-label').textContent=state.phase===3?L('换个情境，请同学解释','A NEW CONTEXT TO DISCUSS'):L('先问全班一个问题','A QUESTION FOR THE ROOM');
+    $('#board-label').textContent=state.phase===3?L('04 / 换个情境，再想一步','04 / TAKE IT FURTHER'):L('01 / 从一个问题开始','01 / START WITH A QUESTION');
     $('#board-question').textContent=T(state.phase===3?section.transfer:teaching.question);
-    $('#board-invitation').textContent=state.phase===3?L('先听判断，再追问理由。','Hear the judgment, then ask for the reason.'):L('先想一想，等老师展示图形。','Think first. The demonstration follows.');
+    $('#board-invitation').textContent=state.phase===3?L('你的判断，依据是什么？','What supports your judgment?'):L('先做一个判断。接下来，用图形验证。','Make a prediction. Then test it with a view.');
     let body='';
-    if(state.phase===0)body=`<p class="lecture-side-label">${L('两种直觉，你更认同哪一种？','WHICH INTUITION FITS?')}</p><div class="oral-choices">${teaching.options.map((option,i)=>`<div><span>${String.fromCharCode(65+i)}</span><p>${T(option)}</p></div>`).join('')}</div><p class="oral-invitation">${L('请同学举手或口头回答，先保留不同判断。','Invite a show of hands or spoken answers. Keep both predictions open.')}</p>`;
+    if(state.phase===0)body=`<p class="lecture-side-label">${L('你会怎么判断？','WHAT DO YOU THINK?')}</p><div class="oral-choices">${teaching.options.map((option,i)=>`<div><span>${String.fromCharCode(65+i)}</span><p>${T(option)}</p></div>`).join('')}</div>`;
     if(state.phase===1)body=`<p class="lecture-side-label">${L('请看这一处变化','WATCH THIS CHANGE')}</p><h2>${state.beat<0?L('先看原图。','First, the original view.'):T(beats[state.beat].title)}</h2><p class="lecture-cue">${esc(lectureCue(section,ctx.lang))}</p>${beats.length>1?`<div class="lecture-beats">${beats.map((beat,i)=>`<button data-beat="${i}" aria-pressed="${state.beat===i}"><span>${i+1}</span>${T(beat.title)}</button>`).join('')}</div>`:''}<button class="lecture-demo-button" id="lecture-apply">${state.beat<beats.length-1?T(beats[state.beat+1].title):L('恢复原图，再比较','Restore the original')} ${arrow}</button>`;
     if(state.phase===2)body=`<p class="lecture-side-label">${L('把变化归纳成一个概念','ONE IDEA TO KEEP')}</p><h2 class="lecture-takeaway">${T(teaching.insight)}</h2><p class="lecture-cue">${T(section.steps[1])}</p>`;
     if(state.phase===3)body=`<p class="lecture-side-label">${L('先讨论，再揭晓','DISCUSS BEFORE REVEALING')}</p><div class="oral-choices transfer-choices ${state.answerRevealed?'answer-revealed':''}">${section.options.map((option,i)=>`<div class="${state.answerRevealed&&i===section.answer?'correct-answer':''}"><span>${String.fromCharCode(65+i)}</span><p>${T(option)}</p>${state.answerRevealed&&i===section.answer?'<b>✓</b>':''}</div>`).join('')}</div>${state.answerRevealed?`<div class="lecture-answer" role="status"><strong>${L('判断依据','Reasoning')}</strong><p>${T(section.reason)}</p></div>`:`<button class="lecture-demo-button" id="lecture-reveal">${L('讨论后，揭示答案','Reveal after discussion')} ${arrow}</button>`}`;
@@ -109,8 +122,15 @@ export function mountLecture(ctx){
   if(state.phase===2&&state.beat<0)applyBeat(beats.length-1);
   paint();refreshFigure();remember();fullscreenLabel();
   return {
-    experiment,closeOverlay:closeParameters,
+    experiment,closeOverlay(){if(state.referenceOpen)closeReference();closeParameters();},
     handleKey(event){
+      if(state.referenceOpen){
+        if(event.key==='Escape'){closeReference();return true;}
+        if(event.key==='Tab'){
+          const f=[...$('#lecture-reference').querySelectorAll('button')];
+          if(event.shiftKey&&document.activeElement===f[0]){event.preventDefault();f.at(-1).focus();}else if(!event.shiftKey&&document.activeElement===f.at(-1)){event.preventDefault();f[0].focus();}
+        }return true;
+      }
       if(event.key==='Escape'&&state.parametersOpen){closeParameters();return true;}
       if(state.parametersOpen){
         if(event.key==='Tab'){
