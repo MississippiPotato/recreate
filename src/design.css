@@ -185,6 +185,7 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .course-card h3 { font-family: var(--serif); font-size: 32px; font-weight: 600; margin: 8px 0 13px; }
 .course-word { font-size: 11px; }
 .course-card p { font-size: 17px; }
+.course-glyph svg { width: 230px; height: 100px; }
 .course-enter { border: 0; border-radius: 0; width: 42px; height: 42px; }
 .course-card:hover .course-enter { background: var(--accent); }
 .clinic-invite { border-radius: 0; max-width: 1310px; background: #e7ece8; border-top: 1px solid #abbcb4; border-bottom: 1px solid #abbcb4; }
