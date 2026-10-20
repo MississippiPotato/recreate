@@ -47,7 +47,7 @@ function defaults(section) {
   return {operation:'all',threshold:75,selected:'S001',field:'major',semantic:'id',next:'B,C,D',joined:false,
     stage:0,orientation:'horizontal',collapsed:[],node:'Design',context:section.kind==='palette'?'category':'temperature',palette:'sequential',vision:'original',labels:true,
     hue:205,lightness:55,saturation:55,count:5,harmony:'analogous',layout:'wide',cellKey:'A:income',scale:'linear',curve:'linear',height:230,
-    iso:50,cell:14,corners:null,show:0,view:section.id==='5.3'?'calendar':'line',day:181,period:14,revealed:false,character:0,event:0};
+    iso:50,cell:14,corners:null,show:0,showFit:false,view:section.id==='5.3'?'calendar':'line',day:181,period:14,revealed:false,character:0,event:0};
 }
 export function createExperiment(host,section,lang,onChange=()=>{}) {
   let state=defaults(section), baseline=null, stage=0;
@@ -89,16 +89,17 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
         parent.append(button(state.labels?L('隐藏数值标签','Hide value labels'):L('显示数值标签','Show value labels'),()=>update('labels',!state.labels)));
       }
     }
-    if(k==='colorModel') {range(parent,'hue',L('色相 H','Hue H'),0,360);range(parent,'lightness',L('亮度 L','Lightness L'),5,95);}
+    if(k==='colorModel') {range(parent,'hue',L('色相 H','Hue H'),0,360);range(parent,'saturation',L('饱和度 S','Saturation S'),0,100);range(parent,'lightness',L('亮度 L','Lightness L'),5,95);}
     if(k==='gamut')range(parent,'lightness',L('Lab 明度 L','Lab lightness L'),5,95);
     if(['harmony','generator'].includes(k)) {
       range(parent,'hue',L('基准色相','Base hue'),0,360);
-      if(k==='harmony')select(parent,'harmony',L('色相关系','Hue relationship'),[['analogous',L('类似色','Analogous')],['complementary',L('互补色','Complementary')],['triadic',L('三角色','Triadic')]]);
+      if(k==='harmony')select(parent,'harmony',L('色相关系','Hue relationship'),[['monochromatic',L('单色','Monochromatic')],['analogous',L('类似色','Analogous')],['complementary',L('互补色','Complementary')],['triadic',L('三角色','Triadic')],['split',L('分裂互补','Split complementary')]]);
       else {range(parent,'saturation',L('饱和度','Saturation'),15,95);range(parent,'count',L('颜色数量','Color count'),3,10);}
     }
     if(k==='reshape')select(parent,'layout',L('表格形式','Table form'),[['wide',L('宽表','Wide')],['long',L('长表','Long')]]);
     if(k==='scale')select(parent,'scale',L('坐标尺度','Scale'),[['linear',L('线性','Linear')],['log',L('对数','Logarithmic')]]);
-    if(k==='curve')select(parent,'curve',L('连接方法','Interpolation'),[['linear','Linear'],['monotone','Monotone X'],['catmull','Catmull–Rom']]);
+    if(k==='curve')select(parent,'curve',L('连接方法','Interpolation'),[['linear','Linear'],['step','Step'],['stepBefore','Step before'],['stepAfter','Step after'],['basis','Basis'],['cardinal','Cardinal'],['catmull','Catmull–Rom'],['natural','Natural'],['monotone','Monotone X'],['bump','Bump X']]);
+    if(k==='curve')parent.append(button(state.showFit?L('移除拟合直线','Remove fitted line'):L('叠加最小二乘直线','Overlay least-squares fit'),()=>update('showFit',!state.showFit)));
     if(k==='aspect')range(parent,'height',L('图形高度','Chart height'),110,300,10);
     if(k==='contour') {
       range(parent,'iso',L('等值线阈值','Contour threshold'),10,90);
@@ -208,7 +209,11 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
       const strip=document.createElement('div');strip.className='pipeline-strip';stages.forEach((s,i)=>{const b=button(`${i+1} · ${s}`,()=>update('stage',i),Number(p.stage)===i?'active':'');if(readonly)b.disabled=true;strip.append(b);});parent.append(strip);
       if(Number(p.stage)===0) {rowsTable(parent,calc.students.slice(0,8),p,readonly);status(parent,L('输入：80 条记录。选中编号的身份在后续阶段保持不变。','Input: 80 records. Selected IDs retain their identity through later stages.'));}
       else if(Number(p.stage)===1)drawGroups(parent,p,readonly);
-      else drawTree(parent,p,readonly,Number(p.stage)===2);
+      else if(Number(p.stage)===2){
+        const table=document.createElement('div');table.className='pipeline-hierarchy';
+        table.innerHTML=`<h3>${L('新生','Students')} <b>80</b></h3><div>${calc.groupRecords(calc.students).map(group=>`<section><h4>${majorName(group.key,lang)} <b>${group.count}</b></h4>${calc.groupRecords(group.members,'class').map(c=>`<p>${L('班级','Class')} ${c.key}<b>${c.count}</b></p>`).join('')}</section>`).join('')}</div>`;
+        parent.append(table);status(parent,L('分组结果被组织成两层关系，尚未计算节点的屏幕坐标。','Grouping results form two levels of relationships; node screen coordinates have not yet been computed.'));
+      }else drawTree(parent,p,readonly,false);
     } else if(k==='groups')drawGroups(parent,p,readonly);
     else if(['tree','treeList'].includes(k))drawTree(parent,p,readonly,k==='treeList');
     else if(['palette','vision'].includes(k)) {
@@ -351,9 +356,11 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
 }
 function drawColorModel(parent,p,lang) {
   const d3=window.d3,g=svg(parent,label('HSL 与灰度预览','HSL and grayscale preview',lang),300);
-  const c=d3.hsl(p.hue,.65,p.lightness/100).formatHex();
+  const c=d3.hsl(p.hue,p.saturation/100,p.lightness/100).formatHex();
   [c,simulateVision(c,'gray')].forEach((fill,i)=>{g.append('rect').attr('x',60+i*270).attr('y',35).attr('width',210).attr('height',180).attr('rx',4).attr('fill',fill);text(g,165+i*270,250,i===0?`H ${p.hue}° · L ${p.lightness}%`:label('灰度预览','Grayscale',lang),13,'#68706e','middle');});
-  text(g,300,285,c,15,'#376578','middle');
+  const rgb=d3.rgb(c),lab=d3.lab(c);
+  text(g,300,278,`${c} · RGB(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)})`,13,'#376578','middle');
+  text(g,300,298,`Lab(${lab.l.toFixed(1)}, ${lab.a.toFixed(1)}, ${lab.b.toFixed(1)})`,12,'#68706e','middle');
 }
 function drawGamut(parent,p,lang) {
   const d3=window.d3,g=svg(parent,label('Lab 固定明度的 sRGB 色域切片','sRGB gamut slice at fixed Lab lightness',lang),360);
@@ -363,16 +370,22 @@ function drawGamut(parent,p,lang) {
 function drawHarmony(parent,p,lang,kind) {
   const d3=window.d3,g=svg(parent,label('色轮与生成色板','Color wheel and generated palette',lang),330);
   for(let h=0;h<360;h+=3){const a=h*Math.PI/180;g.append('circle').attr('cx',160+100*Math.cos(a)).attr('cy',155+100*Math.sin(a)).attr('r',6).attr('fill',d3.hsl(h,.6,.52).formatHex());}
-  const offsets=kind==='generator'?Array.from({length:p.count},(_,i)=>i*360/p.count):p.harmony==='complementary'?[0,180]:p.harmony==='triadic'?[0,120,240]:[-30,0,30];
-  offsets.forEach((offset,i)=>{const h=(p.hue+offset+360)%360,a=h*Math.PI/180,c=d3.hsl(h,p.saturation/100,.52).formatHex();g.append('line').attr('x1',160).attr('y1',155).attr('x2',160+100*Math.cos(a)).attr('y2',155+100*Math.sin(a)).attr('stroke','#25313a');g.append('circle').attr('cx',160+100*Math.cos(a)).attr('cy',155+100*Math.sin(a)).attr('r',10).attr('stroke','#fff').attr('stroke-width',2).attr('fill',c);g.append('rect').attr('x',340).attr('y',25+i*(270/offsets.length)).attr('width',190).attr('height',250/offsets.length).attr('rx',2).attr('fill',c);text(g,435,25+i*(270/offsets.length)+125/offsets.length+4,c,12,'#fff','middle');});
+  const offsets=kind==='generator'?Array.from({length:p.count},(_,i)=>i*360/p.count):p.harmony==='monochromatic'?[0,0,0]:p.harmony==='split'?[0,150,210]:p.harmony==='complementary'?[0,180]:p.harmony==='triadic'?[0,120,240]:[-30,0,30];
+  offsets.forEach((offset,i)=>{const h=(p.hue+offset+360)%360,a=h*Math.PI/180,light=p.harmony==='monochromatic'?[.32,.52,.74][i]:.52,c=d3.hsl(h,p.saturation/100,light).formatHex();g.append('line').attr('x1',160).attr('y1',155).attr('x2',160+100*Math.cos(a)).attr('y2',155+100*Math.sin(a)).attr('stroke','#25313a');g.append('circle').attr('cx',160+100*Math.cos(a)).attr('cy',155+100*Math.sin(a)).attr('r',10).attr('stroke','#fff').attr('stroke-width',2).attr('fill',c);g.append('rect').attr('x',340).attr('y',25+i*(270/offsets.length)).attr('width',190).attr('height',250/offsets.length).attr('rx',2).attr('fill',c);text(g,435,25+i*(270/offsets.length)+125/offsets.length+4,c,12,light>.65?'#203449':'#fff','middle');});
 }
 function drawCurve(parent,p,lang) {
   const d3=window.d3,g=svg(parent,label('固定采样点与连接曲线','Fixed samples and interpolated curve',lang),380);
   const data=[{x:0,y:15},{x:1,y:75},{x:2,y:78},{x:3,y:20},{x:4,y:25},{x:5,y:60}];
   const height=p.height||230,x=d3.scaleLinear([0,5],[0,520]),y=d3.scaleLinear([0,100],[height,0]);
   chartAxes(g,x,y,520,height);
-  const curve={linear:d3.curveLinear,monotone:d3.curveMonotoneX,catmull:d3.curveCatmullRom.alpha(.5)}[p.curve];
+  const curve={linear:d3.curveLinear,step:d3.curveStep,stepBefore:d3.curveStepBefore,stepAfter:d3.curveStepAfter,basis:d3.curveBasis,cardinal:d3.curveCardinal,catmull:d3.curveCatmullRom.alpha(.5),natural:d3.curveNatural,monotone:d3.curveMonotoneX,bump:d3.curveBumpX}[p.curve]||d3.curveLinear;
   g.append('path').attr('transform','translate(50,30)').attr('d',d3.line().x(r=>x(r.x)).y(r=>y(r.y)).curve(curve)(data)).attr('fill','none').attr('stroke','#376578').attr('stroke-width',2.5);
+  if(p.showFit){
+    const fit=calc.leastSquares(data);
+    const endpoints=[0,5].map(value=>({x:value,y:fit.intercept+fit.slope*value}));
+    g.append('path').attr('class','regression-line').attr('transform','translate(50,30)').attr('d',d3.line().x(r=>x(r.x)).y(r=>y(r.y))(endpoints)).attr('fill','none').attr('stroke','#df744c').attr('stroke-width',2.5).attr('stroke-dasharray','7 5');
+    text(g,570,342,label(`最小二乘：y = ${fit.slope.toFixed(2)}x + ${fit.intercept.toFixed(2)}`,`Least squares: y = ${fit.slope.toFixed(2)}x + ${fit.intercept.toFixed(2)}`,lang),12,'#ad613d','end');
+  }
   data.forEach(r=>{g.append('circle').attr('cx',50+x(r.x)).attr('cy',30+y(r.y)).attr('r',5).attr('fill','#a74732').attr('stroke','#ffffff').attr('stroke-width',2);text(g,50+x(r.x),20+y(r.y),r.y,12,'#a74732','middle');});
   text(g,570,365,label('固定采样值 · 时间 0 至 5','Fixed samples · time 0 to 5',lang),12,'#68706e','end');
 }

@@ -39,6 +39,15 @@ export function linearMap(value, domain, range) {
   if (domain[0] === domain[1]) return (range[0] + range[1]) / 2;
   return range[0] + (value - domain[0]) / (domain[1] - domain[0]) * (range[1] - range[0]);
 }
+export function leastSquares(points) {
+  if(points.length<2)return null;
+  const meanX=points.reduce((sum,p)=>sum+p.x,0)/points.length;
+  const meanY=points.reduce((sum,p)=>sum+p.y,0)/points.length;
+  const denominator=points.reduce((sum,p)=>sum+(p.x-meanX)**2,0);
+  if(!denominator)return null;
+  const slope=points.reduce((sum,p)=>sum+(p.x-meanX)*(p.y-meanY),0)/denominator;
+  return {slope,intercept:meanY-slope*meanX};
+}
 export function interpolateEdge(a, b, threshold) {
   if (a === b) return null; // Flat edges do not define a unique crossing.
   return (threshold - a) / (b - a);
