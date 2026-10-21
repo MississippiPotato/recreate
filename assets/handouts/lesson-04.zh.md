@@ -58,6 +58,26 @@ const groups = d3.group(long,d=>d.metric);
 
 `row.metric` 会读取名叫 metric 的字段，`row[metric]` 才会使用变量里的字段名。内层 map 为一个州生成多条指标记录，外层 flatMap 把它们合成一个数组。实体名和指标名一起标识单元格。
 
+#### 3. Crime 1985：从宽表到比较指标
+
+```javascript
+const rows = await d3.csv(url, row => ({
+  category: row['犯罪类型'], male: +row['男性'], female: +row['女性']
+}));
+// 不改写原字段，增加一个可比较的差比例。
+const withRatio = rows.map(row => ({...row,
+  ratio: (row.male - row.female) / (row.male + row.female)
+}));
+const longRows = rows.flatMap(row => [
+  {category:row.category, gender:'male', value:row.male},
+  {category:row.category, gender:'female', value:row.female}
+]);
+```
+
+**关键点解释**
+
+宽表把男性、女性放在两列；长表用 `gender` 字段保存列名，用 `value` 保存数值。差比例位于 −1 到 1，便于比较不同总量的类别；并列查看原始人数，才能区分数量与比例。
+
 ### 运行示例: flatMap 与联合标识
 
 ```javascript
@@ -229,6 +249,22 @@ svg.append('path').datum(fitted)
 
 直线模型是 `y = ax + b`。这里用中心化后的 x、y 计算斜率 a，再计算截距 b。`extent` 给出 x 的两端，算出两端的预测值即可画直线。与切换 curve 相比，这一步实际计算了模型参数。
 
+#### 3. 同一组点叠加十种曲线
+
+```javascript
+const curves = [d3.curveLinear, d3.curveMonotoneX, d3.curveNatural,
+  d3.curveBasis, d3.curveCardinal, d3.curveCatmullRom.alpha(0.5),
+  d3.curveStep, d3.curveStepBefore, d3.curveStepAfter, d3.curveBundle.beta(0.85)];
+// 每一条路径都使用相同的数据与坐标轴。
+svg.selectAll('path.interpolation').data(curves).join('path')
+  .attr('class','interpolation').attr('fill','none')
+  .attr('d', curve => d3.line().x(d => x(d[0])).y(d => y(d[1])).curve(curve)(points));
+```
+
+**关键点解释**
+
+`.curve(curve)` 把一个曲线工厂交给路径生成器。传给 `.data` 的是十个工厂，因此生成十条路径。用平台段比较 Cardinal 的越界和 MonotoneX 的单调性；Basis、Bundle 等规则未必经过每个采样点。
+
 ### 运行示例: line 生成器与 curve
 
 ```javascript
@@ -305,6 +341,24 @@ console.log(lineAtAngle(45));
 **关键点解释**
 
 角度先乘 π/180 转为弧度。cos 给出水平分量，sin 给出竖直分量。数学坐标通常向上为正，SVG 则向下为正，因此这里使用负号。返回的四个值可以分别设置到 line 的 x1、y1、x2、y2。
+
+#### 3. 平均绝对倾角的计算
+
+```javascript
+// 点先归一化到 0–1，W、H 是绘图区的实际宽高。
+const angles = d3.pairs(points, (a, b) => {
+  const dx = Math.abs(b[0] - a[0]) * W;
+  const dy = Math.abs(b[1] - a[1]) * H;
+  return Math.atan2(dy, dx) * 180 / Math.PI;
+});
+const meanAngle = d3.mean(angles);
+// 二分查找 H，使平均角度接近 45°；保留原数据。
+console.log(meanAngle);
+```
+
+**关键点解释**
+
+`d3.pairs` 把相邻点变成线段。`atan2(dy, dx)` 返回弧度，乘以 `180 / π` 后得到角度。这里计算未加权的平均绝对倾角；改变 H/W 会改变屏幕倾角，点的原始数值保持不变。
 
 ### 运行示例: 用 range 改变画布倾角
 
@@ -389,6 +443,23 @@ svg.selectAll('path.contour').data(contours).join('path').attr('class','contour'
 **关键点解释**
 
 `d3.contours()` 创建生成器，`size` 和 `thresholds` 配置它，最后的 `(values)` 执行计算。输出是等值区域的 MultiPolygon；`geoPath` 将多边形变为 path 字符串。这里的填充表示阈值区域，描边显示区域边界。
+
+#### 3. 从完整二维场生成填充等值面
+
+```javascript
+const rows = d3.csvParseRows(text, row => row.map(Number));
+const values = rows.flat();
+// size 的顺序是 [列数, 行数]，values 按行展开。
+const contours = d3.contours().size([rows[0].length, rows.length])
+  .thresholds(d3.range(-20, 46, 5))(values);
+const path = d3.geoPath(d3.geoIdentity().scale(cellSize));
+svg.selectAll('path.contour').data(contours, d => d.value).join('path')
+  .attr('class','contour').attr('d',path).attr('fill',d => color(d.value));
+```
+
+**关键点解释**
+
+`d3.contours` 对每个阈值返回一个 MultiPolygon，表示数值不小于该阈值的区域。`geoPath` 将几何对象转成 SVG 路径。选中某个单元格后，右侧小图解释该区域边界如何由四角分类和边插值构成。
 
 ### 运行示例: d3.contours 的输入约定
 

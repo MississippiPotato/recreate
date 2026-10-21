@@ -3,9 +3,9 @@ export const clinicTemperatures=Object.freeze([18,19,null,21,22,23,21]);
 export const visibleRatio=(baseline,a=80,b=84)=>(b-baseline)/(a-baseline);
 export const repairMissing=(values,mode)=>values.map(value=>value===null&&mode==='zero'?0:value);
 
-export function mountClinic(host,{L,arrow,classroom=false}){
+export function mountClinic(host,{L,arrow,classroom=false,initialCase=0}){
   const d3=window.d3;
-  let current=0,baseline=76,palette='sequential',missing='zero',revealed=false;
+  let current=initialCase,baseline=76,palette='sequential',missing='zero',revealed=false;
   const cases=[
     {name:L('坐标截断','Truncated axes'),question:L('只多了 4，为什么看起来翻倍？','Only 4 more. Why does it look doubled?'),hint:L('两组数值为 80 与 84。拖动右图的纵轴起点，观察柱长比例。','The values are 80 and 84. Change the right chart’s baseline and compare lengths.'),route:'#ch-4-2',related:L('继续学习：坐标映射','Continue: scales')},
     {name:L('类别配色','Categorical colors'),question:L('学院名称，也有从小到大的顺序吗？','Do college names have a quantitative order?'),hint:L('四个学院各有 20 条记录。切换配色，观察颜色深浅是否暗示了排名。','Each college has 20 records. Switch palettes and inspect whether lightness suggests a ranking.'),route:'#ch-3-2',related:L('继续学习：颜色映射','Continue: color mapping')},

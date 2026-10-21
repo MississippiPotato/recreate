@@ -2,6 +2,7 @@ import {allSections} from './course-data.js';
 import {readingNotes} from './reading-notes.js';
 import {codeGuide, guideSource} from './code-guide.js';
 import {codeLabs, programSource} from './code-labs.js';
+import {lessonSteps} from './lesson-steps.js';
 
 const plain = value => String(value ?? '').replace(/<[^>]*>/g, ' ').replace(/&(?:nbsp|amp);/g, ' ').replace(/\s+/g, ' ').trim();
 const normalize = value => value.normalize('NFKC').toLowerCase();
@@ -31,7 +32,8 @@ export function buildSearchIndex() {
     const lab = codeLabs[section.api];
     add(section, 'code', 'syntax-preview', {zh: `运行示例：${lab.title.zh}`, en: `Run example: ${lab.title.en}`},
       Object.fromEntries(['zh', 'en'].map(lang => [lang, programSource(lab, lang)])), true);
-    add(section, 'demo', 'demo-workspace', section.title, section.watch);
+    const walkthrough=lessonSteps(section);
+    add(section, 'demo', 'demo-workspace', section.title, Object.fromEntries(['zh','en'].map(lang=>[lang,section.watch[lang]+' '+walkthrough.map(step=>step.title[lang]).join(' ')+(section.id==='4.1'?' Crime 1985 male female ratio parallel coordinates 平行坐标 性别差比例':section.id==='4.5'?' terrain10 等值面 二维场':'')])));
   }
   return documents;
 }

@@ -491,6 +491,23 @@ console.log(genPalette(210,0.6,0.55));
 
 内部的 `color` 函数复用色相循环、范围处理和格式化步骤。每一项保留主色 H、S、L 的关系，只改变相应偏移或倍数。返回值是颜色数组，可以交给 `scaleOrdinal().range(...)`，也可以直接生成色块。
 
+#### 2. 鲜艳色与低饱和色成对生成
+
+```javascript
+const hues = [H, H + 30, H + 180];
+// 每个色相生成两种饱和度，色相身份不变。
+const pairs = hues.flatMap(hue => [
+  d3.hsl(hue, S / 100, L / 100).formatHex(),
+  d3.hsl(hue, S * 0.48 / 100, Math.min(95, L + 22) / 100).formatHex()
+]);
+const background = d3.hsl(H, S * 0.14 / 100, 0.92).formatHex();
+console.log([...pairs, background]);
+```
+
+**关键点解释**
+
+`flatMap` 把每个色相返回的两个颜色展开为一个数组。`d3.hsl` 的饱和度和明度使用 0–1；控件的百分数需先除以 100。成对颜色共享色相，可以分别用于实心图形与浅色区域；最后一色用于背景。
+
 ### 运行示例: 参数化生成色板
 
 ```javascript
@@ -548,6 +565,23 @@ nodes.selectAll('text').data(d=>[d]).join('text').attr('x',10).text(d=>d.categor
 **关键点解释**
 
 `d3.symbol()` 是路径生成器。`type(...)` 设置形状，再加一对 `()` 才生成 SVG path 字符串。父组绑定一条记录，子选择集通过 `d => [d]` 继承该记录；文字、形状和颜色共同标识类别。
+
+#### 2. 从线性 RGB 到色觉对比
+
+```javascript
+// sRGB 编码值先线性化，不能直接套矩阵。
+const linear = channel => channel <= 0.04045
+  ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+const rgb = [color.r, color.g, color.b].map(v => linear(v / 255));
+// 绿色觉缺失矩阵，三行分别产生三个输出通道。
+const matrix = [[0.367322,0.860646,-0.227968],
+  [0.280085,0.672501,0.047413],[-0.011820,0.042940,0.968881]];
+const simulated = matrix.map(row => row.reduce((sum, coefficient, i) => sum + coefficient * rgb[i], 0));
+```
+
+**关键点解释**
+
+矩阵乘法使用 `map` 生成输出通道、`reduce` 求内积。结果还需重新编码为 sRGB 并限制显示范围。画布提供红、绿、蓝三种色觉对比；形状与文字标签作为独立编码保留。
 
 ### 运行示例: 形状与文字冗余编码
 

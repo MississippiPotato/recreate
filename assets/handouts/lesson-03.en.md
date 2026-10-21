@@ -491,6 +491,23 @@ console.log(genPalette(210,0.6,0.55));
 
 The inner `color` function reuses wrapping, bounds handling and formatting. Each entry derives from the base H/S/L through offsets or factors. The returned array can feed an ordinal range or swatch display.
 
+#### 2. Generate vivid and muted pairs
+
+```javascript
+const hues = [H, H + 30, H + 180];
+// Produce two saturations for each hue, retaining its identity.
+const pairs = hues.flatMap(hue => [
+  d3.hsl(hue, S / 100, L / 100).formatHex(),
+  d3.hsl(hue, S * 0.48 / 100, Math.min(95, L + 22) / 100).formatHex()
+]);
+const background = d3.hsl(H, S * 0.14 / 100, 0.92).formatHex();
+console.log([...pairs, background]);
+```
+
+**Key-point explanation**
+
+flatMap flattens two colors per hue into one array. D3 HSL saturation and lightness use 0–1, so convert percentage controls. Paired colors share a hue; the final low-saturation color supplies a background.
+
 ### Runnable example: Parameterized palette generation
 
 ```javascript
@@ -548,6 +565,23 @@ nodes.selectAll('text').data(d=>[d]).join('text').attr('x',10).text(d=>d.categor
 **Key-point explanation**
 
 `d3.symbol()` is a path generator. Set its type and then invoke it with `()` to obtain SVG path data. Each parent group has one record; `d => [d]` binds that record to each child mark. Text, shape and color identify the category together.
+
+#### 2. Simulate vision in linear RGB
+
+```javascript
+// Decode sRGB before applying the matrix.
+const linear = channel => channel <= 0.04045
+  ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+const rgb = [color.r, color.g, color.b].map(v => linear(v / 255));
+// Each row of the deuteranopia matrix produces one output channel.
+const matrix = [[0.367322,0.860646,-0.227968],
+  [0.280085,0.672501,0.047413],[-0.011820,0.042940,0.968881]];
+const simulated = matrix.map(row => row.reduce((sum, coefficient, i) => sum + coefficient * rgb[i], 0));
+```
+
+**Key-point explanation**
+
+Map produces output channels and reduce computes each dot product. Re-encode the result as sRGB and clamp it for display. The canvas compares three vision modes while retaining shapes and labels as independent encodings.
 
 ### Runnable example: Redundant shape and text
 

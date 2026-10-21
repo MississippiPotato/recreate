@@ -382,6 +382,21 @@ for (const [className, count] of countByClass) console.log(className, count);
 
 `group` 与 `rollup` 都返回 Map 结构。区别在最内层：前者是记录数组，后者是 reducer 的返回值。`for...of` 遍历 Map 时，每一项是 `[key, value]`，可以直接解构。
 
+#### 4. 让数据块移动，而不是重建画布
+
+```javascript
+// id 保留输入身份，filter 只决定哪些项进入结果。
+const kept = rows.filter(row => row.value > threshold);
+const blocks = svg.selectAll('g.block').data(kept, row => row.id).join('g');
+// 同一个节点平滑移动到它的新位置。
+blocks.interrupt().transition().duration(650)
+  .attr('transform', row => `translate(${x(row)},${y(row)})`);
+```
+
+**关键点解释**
+
+`.data(kept, row => row.id)` 让筛选前后仍在结果中的记录复用节点。`transition()` 在旧坐标与新坐标之间插值；重新调用时先 `interrupt()`，避免连续操作排成长队。
+
 ### 运行示例: filter → map → sum
 
 ```javascript

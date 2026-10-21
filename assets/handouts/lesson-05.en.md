@@ -351,6 +351,21 @@ function segmentPath(t0,t1) {
 
 Follow the outer start to outer end, then return along the inner edge and close with Z. Side 1/−1 selects the radial offset. Short straight edges approximate each small cell; smaller angular spans refine the approximation.
 
+#### 4. Interpolate Cartesian coordinates into a spiral
+
+```javascript
+const angle = day / period * 2 * Math.PI - Math.PI / 2;
+const radius = 27 + day * radiusStep;
+const polar = [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+// u ranges from 0 to 1; each point retains its key.
+const position = linear.map((coordinate, i) => coordinate + (polar[i] - coordinate) * u);
+circles.attr('cx', position[0]).attr('cy', position[1]);
+```
+
+**Key-point explanation**
+
+At u=0 the point uses Cartesian coordinates; at u=1 it uses polar coordinates. Intermediate values interpolate the same point without changing its observation or key. Period controls days per turn.
+
 ### Runnable example: Polar to Cartesian coordinates
 
 ```javascript

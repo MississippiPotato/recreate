@@ -689,6 +689,88 @@ export const codeGuide={
   ]
 };
 
+// The original excerpts above remain intact. These additions explain the new
+// linked canvases alongside the same APIs already used in the course.
+codeGuide['1.4'].push(G('让数据块移动，而不是重建画布','Move data blocks instead of rebuilding the canvas',function(){
+  // id 保留输入身份，filter 只决定哪些项进入结果。 ←→ IDs retain identity; filter selects the result.
+  const kept = rows.filter(row => row.value > threshold);
+  const blocks = svg.selectAll('g.block').data(kept, row => row.id).join('g');
+  // 同一个节点平滑移动到它的新位置。 ←→ Move the same node smoothly to its new position.
+  blocks.interrupt().transition().duration(650)
+    .attr('transform', row => `translate(${x(row)},${y(row)})`);
+},'<code>.data(kept, row => row.id)</code> 让筛选前后仍在结果中的记录复用节点。<code>transition()</code> 在旧坐标与新坐标之间插值；重新调用时先 <code>interrupt()</code>，避免连续操作排成长队。','Keyed data binding reuses nodes for retained records. A transition interpolates old and new coordinates; interrupt an earlier transition before responding to another operation.'));
+codeGuide['3.7'].push(G('鲜艳色与低饱和色成对生成','Generate vivid and muted pairs',function(){
+  const hues = [H, H + 30, H + 180];
+  // 每个色相生成两种饱和度，色相身份不变。 ←→ Produce two saturations for each hue, retaining its identity.
+  const pairs = hues.flatMap(hue => [
+    d3.hsl(hue, S / 100, L / 100).formatHex(),
+    d3.hsl(hue, S * 0.48 / 100, Math.min(95, L + 22) / 100).formatHex()
+  ]);
+  const background = d3.hsl(H, S * 0.14 / 100, 0.92).formatHex();
+  console.log([...pairs, background]);
+},'<code>flatMap</code> 把每个色相返回的两个颜色展开为一个数组。<code>d3.hsl</code> 的饱和度和明度使用 0–1；控件的百分数需先除以 100。成对颜色共享色相，可以分别用于实心图形与浅色区域；最后一色用于背景。','flatMap flattens two colors per hue into one array. D3 HSL saturation and lightness use 0–1, so convert percentage controls. Paired colors share a hue; the final low-saturation color supplies a background.'));
+codeGuide['3.8'].push(G('从线性 RGB 到色觉对比','Simulate vision in linear RGB',function(){
+  // sRGB 编码值先线性化，不能直接套矩阵。 ←→ Decode sRGB before applying the matrix.
+  const linear = channel => channel <= 0.04045
+    ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  const rgb = [color.r, color.g, color.b].map(v => linear(v / 255));
+  // 绿色觉缺失矩阵，三行分别产生三个输出通道。 ←→ Each row of the deuteranopia matrix produces one output channel.
+  const matrix = [[0.367322,0.860646,-0.227968],
+    [0.280085,0.672501,0.047413],[-0.011820,0.042940,0.968881]];
+  const simulated = matrix.map(row => row.reduce((sum, coefficient, i) => sum + coefficient * rgb[i], 0));
+},'矩阵乘法使用 <code>map</code> 生成输出通道、<code>reduce</code> 求内积。结果还需重新编码为 sRGB 并限制显示范围。画布提供红、绿、蓝三种色觉对比；形状与文字标签作为独立编码保留。','Map produces output channels and reduce computes each dot product. Re-encode the result as sRGB and clamp it for display. The canvas compares three vision modes while retaining shapes and labels as independent encodings.'));
+codeGuide['4.1'].push(G('Crime 1985：从宽表到比较指标','Crime 1985: reshape and derive a comparison',async function(){
+  const rows = await d3.csv(url, row => ({
+    category: row['犯罪类型'], male: +row['男性'], female: +row['女性']
+  }));
+  // 不改写原字段，增加一个可比较的差比例。 ←→ Add a difference ratio without changing source fields.
+  const withRatio = rows.map(row => ({...row,
+    ratio: (row.male - row.female) / (row.male + row.female)
+  }));
+  const longRows = rows.flatMap(row => [
+    {category:row.category, gender:'male', value:row.male},
+    {category:row.category, gender:'female', value:row.female}
+  ]);
+},'宽表把男性、女性放在两列；长表用 <code>gender</code> 字段保存列名，用 <code>value</code> 保存数值。差比例位于 −1 到 1，便于比较不同总量的类别；并列查看原始人数，才能区分数量与比例。','The wide table has male and female columns. The long table stores the column identity in gender and its count in value. A difference ratio supports comparison across unequal totals; inspect source counts alongside it.'));
+codeGuide['4.3'].push(G('同一组点叠加十种曲线','Overlay ten curves on the same points',function(){
+  const curves = [d3.curveLinear, d3.curveMonotoneX, d3.curveNatural,
+    d3.curveBasis, d3.curveCardinal, d3.curveCatmullRom.alpha(0.5),
+    d3.curveStep, d3.curveStepBefore, d3.curveStepAfter, d3.curveBundle.beta(0.85)];
+  // 每一条路径都使用相同的数据与坐标轴。 ←→ Every path uses the same data and axes.
+  svg.selectAll('path.interpolation').data(curves).join('path')
+    .attr('class','interpolation').attr('fill','none')
+    .attr('d', curve => d3.line().x(d => x(d[0])).y(d => y(d[1])).curve(curve)(points));
+},'<code>.curve(curve)</code> 把一个曲线工厂交给路径生成器。传给 <code>.data</code> 的是十个工厂，因此生成十条路径。用平台段比较 Cardinal 的越界和 MonotoneX 的单调性；Basis、Bundle 等规则未必经过每个采样点。','The curve factory configures a line generator. Binding ten factories produces ten paths on shared scales. Plateaus expose Cardinal overshoot and MonotoneX monotonicity; Basis and Bundle need not pass through every sample.'));
+codeGuide['4.4'].push(G('平均绝对倾角的计算','Compute the mean absolute angle',function(){
+  // 点先归一化到 0–1，W、H 是绘图区的实际宽高。 ←→ Normalize points to 0–1; W and H are plot dimensions.
+  const angles = d3.pairs(points, (a, b) => {
+    const dx = Math.abs(b[0] - a[0]) * W;
+    const dy = Math.abs(b[1] - a[1]) * H;
+    return Math.atan2(dy, dx) * 180 / Math.PI;
+  });
+  const meanAngle = d3.mean(angles);
+  // 二分查找 H，使平均角度接近 45°；保留原数据。 ←→ Bisect H to approach a mean angle of 45°, keeping data fixed.
+  console.log(meanAngle);
+},'<code>d3.pairs</code> 把相邻点变成线段。<code>atan2(dy, dx)</code> 返回弧度，乘以 <code>180 / π</code> 后得到角度。这里计算未加权的平均绝对倾角；改变 H/W 会改变屏幕倾角，点的原始数值保持不变。','Pairs produces adjacent segments. atan2 returns radians, converted to degrees by 180/π. The calculator uses an unweighted mean absolute angle. Changing H/W changes screen orientation while preserving source values.'));
+codeGuide['4.5'].push(G('从完整二维场生成填充等值面','Generate filled contours from a full field',function(){
+  const rows = d3.csvParseRows(text, row => row.map(Number));
+  const values = rows.flat();
+  // size 的顺序是 [列数, 行数]，values 按行展开。 ←→ Size is [columns, rows]; values are row-major.
+  const contours = d3.contours().size([rows[0].length, rows.length])
+    .thresholds(d3.range(-20, 46, 5))(values);
+  const path = d3.geoPath(d3.geoIdentity().scale(cellSize));
+  svg.selectAll('path.contour').data(contours, d => d.value).join('path')
+    .attr('class','contour').attr('d',path).attr('fill',d => color(d.value));
+},'<code>d3.contours</code> 对每个阈值返回一个 MultiPolygon，表示数值不小于该阈值的区域。<code>geoPath</code> 将几何对象转成 SVG 路径。选中某个单元格后，右侧小图解释该区域边界如何由四角分类和边插值构成。','Each threshold produces a MultiPolygon covering values at or above it. GeoPath converts the geometry to an SVG path. The selected-cell view explains the local classification and edge interpolation behind the region boundary.'));
+codeGuide['5.4'].push(G('直角坐标到螺旋的连续插值','Interpolate Cartesian coordinates into a spiral',function(){
+  const angle = day / period * 2 * Math.PI - Math.PI / 2;
+  const radius = 27 + day * radiusStep;
+  const polar = [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+  // u 从 0 到 1；每个点保留自己的 key。 ←→ u ranges from 0 to 1; each point retains its key.
+  const position = linear.map((coordinate, i) => coordinate + (polar[i] - coordinate) * u);
+  circles.attr('cx', position[0]).attr('cy', position[1]);
+},'<code>u=0</code> 时使用直线坐标，<code>u=1</code> 时使用极坐标，之间是同一个点的位置插值。调整卷曲量不会改变记录值或编号；<code>period</code> 决定每圈承载多少天。','At u=0 the point uses Cartesian coordinates; at u=1 it uses polar coordinates. Intermediate values interpolate the same point without changing its observation or key. Period controls days per turn.'));
+
 export function guideSource(guide,lang='zh'){
   const lines=guide.source.toString().split('\n').slice(1,-1);
   const indent=Math.min(...lines.filter(line=>line.trim()).map(line=>line.match(/^ */)[0].length));

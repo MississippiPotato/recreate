@@ -3,7 +3,9 @@ import {codeLabs,programSource} from './code-labs.js';
 import {renderReading,readingOutline} from './reading-notes.js';
 import {codeGuide,guideSource} from './code-guide.js';
 import {mountInteractive} from './interactive.js';
-import {mountIntro} from './intro.js';
+import {mountJourney} from './data-journey.js';
+import {mountStudio} from './learning-studio.js';
+import {lessonSteps} from './lesson-steps.js';
 import {mountClinic} from './clinic.js';
 import {readCourseRoute,readPanelState,writePanelState,sectionHash,sectionKey,localId,panelTypes} from './course-navigation.js';
 import {buildSearchIndex,searchCourse,searchExcerpt} from './course-search.js';
@@ -50,12 +52,9 @@ function drawGlyph(id){
   ];return `<svg viewBox="0 0 230 125" aria-hidden="true">${drawings[id-1]}</svg>`;
 }
 function home(){
-  app.innerHTML=header(null)+`<main id="main" class="portal"><section class="portal-hero"><div class="hero-mesh" aria-hidden="true"></div><div class="portal-copy"><p class="overline">VISUALIZATION · INTRODUCTION</p><h1>${L('可视化导论','Introduction to<br>visualization')}</h1><p class="portal-subtitle">${L('从数据到图表：<br>JavaScript + D3.js 实战课程','From data to charts:<br>a JavaScript + D3.js course')}</p><p class="portal-description">${L('数据、流程、色彩、低维与时序。<br>五个章节，结合讲解、关键代码与交互演示。','Data, pipelines, color, space and time.<br>Five lessons with explanations, annotated code and interactive demonstrations.')}</p><a class="primary" href="#lesson-1">${L('进入第一章','Start lesson one')} ${arrow}</a><a class="portal-secondary" href="#path">${L('查看课程目录','Browse lessons')} ↓</a><div class="portal-meta"><span>05 <small>${L('章节','LESSONS')}</small></span><span>27 <small>${L('小节','SECTIONS')}</small></span><span>中文 / EN</span></div></div><div class="portal-art"><span class="art-label">DATA → VISUALIZATION</span><canvas id="intro-canvas" role="img" aria-label="${L('粒子组成 D3、树、色轮、曲线与日历','Particles forming D3, a tree, a color wheel, a curve and a calendar')}"></canvas><div class="particle-scenes" role="group" aria-label="${L('切换粒子图形','Choose particle artwork')}">${curriculum.map((c,i)=>`<button data-scene="${i}" aria-pressed="${i===0}"><small>0${i+1}</small>${L(['数据','流程','色彩','低维','时序'][i],['Data','Pipeline','Color','Space','Time'][i])}</button>`).join('')}</div></div></section><section id="path" class="portal-lessons"><header><div><p class="overline">COURSE CONTENTS</p><h2>${L('课程章节','Course contents')}</h2></div><p>${L('按章节学习，也可以直接查找某个概念或 D3 语法。','Follow the sequence, or look up a concept or D3 API.')}</p></header><div class="lesson-grid">${curriculum.map(c=>`<a href="#lesson-${c.id}" class="portal-lesson lesson-art-${c.id}" data-course-card="${c.id-1}"><div class="lesson-art"><span>0${c.id}</span>${drawGlyph(c.id)}<b>↗</b></div><div class="portal-lesson-copy"><p>${L('第','LESSON ')} ${c.id} ${L('章','')} · ${c.sections.length} ${L('节','sections')}</p><h3>${T(c.title)}</h3><span>${T(c.summary)}</span><div>${c.sections.slice(0,3).map(s=>T(s.title)).join(' / ')}</div></div></a>`).join('')}<a href="#clinic" class="portal-extra"><span>＋</span><h3>${L('补充案例','Additional examples')}</h3><p>${L('坐标截断、颜色暗示、缺失值。<br>比较同一份数据的不同表达。','Truncated axes, implied rankings and missing values.<br>Compare representations of the same data.')}</p>${arrow}</a></div></section></main>`+footer();
-  const canvas=document.querySelector('#intro-canvas');
-  const cleanup=mountIntro(canvas,index=>document.querySelectorAll('[data-scene]').forEach(b=>b.setAttribute('aria-pressed',Number(b.dataset.scene)===index)));
-  document.querySelectorAll('[data-scene]').forEach(b=>b.onclick=()=>canvas.selectScene?.(Number(b.dataset.scene)));
-  document.querySelectorAll('[data-course-card]').forEach(a=>a.onpointerenter=()=>canvas.selectScene?.(Number(a.dataset.courseCard)));
-  active={cleanup};
+  app.innerHTML=header(null)+`<main id="main" class="portal"><section class="portal-hero"><div class="hero-mesh" aria-hidden="true"></div><div class="portal-copy"><p class="overline">VISUALIZATION · INTRODUCTION</p><h1>${L('可视化导论','Introduction to<br>visualization')}</h1><p class="portal-subtitle">${L('从数据到图表：<br>JavaScript + D3.js 实战课程','From data to charts:<br>a JavaScript + D3.js course')}</p><p class="portal-description">${L('数据、流程、色彩、低维与时序。<br>五个章节，结合讲解、关键代码与交互演示。','Data, pipelines, color, space and time.<br>Five lessons with explanations, annotated code and interactive demonstrations.')}</p><a class="primary" href="#lesson-1">${L('进入第一章','Start lesson one')} ${arrow}</a><a class="portal-secondary" href="#path">${L('查看课程目录','Browse lessons')} ↓</a><div class="portal-meta"><span>05 <small>${L('章节','LESSONS')}</small></span><span>27 <small>${L('小节','SECTIONS')}</small></span><span>中文 / EN</span></div></div><div class="portal-art" id="data-journey"></div></section><section id="path" class="portal-lessons"><header><div><p class="overline">COURSE CONTENTS</p><h2>${L('课程章节','Course contents')}</h2></div><p>${L('按章节学习，也可以直接查找某个概念或 D3 语法。','Follow the sequence, or look up a concept or D3 API.')}</p></header><div class="lesson-grid">${curriculum.map(c=>`<a href="#lesson-${c.id}" class="portal-lesson lesson-art-${c.id}" data-course-card="${c.id-1}"><div class="lesson-art"><span>0${c.id}</span>${drawGlyph(c.id)}<b>↗</b></div><div class="portal-lesson-copy"><p>${L('第','LESSON ')} ${c.id} ${L('章','')} · ${c.sections.length} ${L('节','sections')}</p><h3>${T(c.title)}</h3><span>${T(c.summary)}</span><div>${c.sections.slice(0,3).map(s=>T(s.title)).join(' / ')}</div></div></a>`).join('')}<a href="#clinic" class="portal-extra"><span>＋</span><h3>${L('补充案例','Additional examples')}</h3><p>${L('坐标截断、颜色暗示、缺失值。<br>比较同一份数据的不同表达。','Truncated axes, implied rankings and missing values.<br>Compare representations of the same data.')}</p>${arrow}</a></div></section></main>`+footer();
+  const journey=mountJourney(document.querySelector('#data-journey'),lang);
+  active={cleanup:journey.cleanup};
   if(location.hash==='#path')document.querySelector('#path').scrollIntoView({behavior:'instant'});
 }
 function figureGallery(section){
@@ -66,63 +65,61 @@ function explain(section){
   let reading=renderReading(section.id,lang),gallery=figureGallery(section);
   const before=section.id==='2.3'?'reading-1':section.id==='4.5'?'reading-2':null;
   if(before){reading=reading.replace(`<h2 id="${before}">`,gallery+`<h2 id="${before}">`);gallery='';}
-  return `<div class="explanation-content"><div class="course-reading">${reading}</div>${gallery}<section class="observation" id="observation"><span>${L('配套演示','DEMONSTRATION')}</span><p>${T(section.watch)}</p><a href="${link(section,'demo')}">${L('打开本节演示','Open this demonstration')} ${arrow}</a></section></div>`;
+  return `<div class="explanation-content"><div class="course-reading">${reading}</div>${gallery}<section class="observation" id="observation"><span>${L('配套演示','DEMONSTRATION')}</span><p>${T(section.watch)}</p><a href="${link(section,'demo')}">${L('定位右侧画布','Locate the graphic')} ${arrow}</a></section></div>`;
 }
 function lesson(course,section,tab){
-  const tabs=[['explain',L('讲解','Explanation')],['code',L('关键代码','Key code')],['demo',L('演示','Demonstration')]];
-  app.innerHTML=header(course)+sidebar(course,section)+`<main id="main" class="course-main"><div class="reading-layout"><div class="course-article">
-    <div class="lesson-breadcrumb"><a href="#home">${L('课程首页','Course home')}</a><span>／</span><span>${L('第','LESSON ')} ${course.id} ${L('章','')}</span></div>
-    <header class="chapter-intro"><div class="chapter-title"><p class="overline">LESSON 0${course.id} · ${course.word}</p><h1>${T(course.title)}</h1><p>${T(course.summary)}</p><div class="chapter-meta"><span>${String(course.sections.length).padStart(2,'0')} ${L('小节','SECTIONS')}</span><span>JavaScript + D3.js</span><a href="#${sectionKey(course.sections[0].id)}">${L('开始阅读','Begin reading')} ↓</a></div></div><div class="chapter-drawing" aria-hidden="true"><span>0${course.id}</span>${drawGlyph(course.id)}</div></header>
-    <nav class="chapter-map" aria-label="${L('本章小节','Sections in this lesson')}">${course.sections.map(s=>`<a href="${link(s)}"><span>${s.id}</span>${T(s.title)}</a>`).join('')}</nav>
-    <div class="chapter-sections">${course.sections.map(s=>`<article class="course-section" id="${sectionKey(s.id)}" data-section="${s.id}" aria-labelledby="heading-${sectionKey(s.id)}"><header class="section-heading"><span class="section-number">${s.id}</span><div><p>${lang==='zh'?s.title.en:s.title.zh}</p><h2 id="heading-${sectionKey(s.id)}" tabindex="-1">${T(s.title)}</h2></div></header><div class="section-bar"><nav class="section-tabs" role="tablist" aria-label="${s.id} ${T(s.title)}">${tabs.map(([id,name])=>`<a href="${link(s,id)}" id="${localId(s.id,id,'tab')}" role="tab" data-section-tab="${id}" aria-selected="false" aria-controls="${localId(s.id,id,'panel')}" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${icon(id)}</svg>${name}</a>`).join('')}</nav><button class="section-fullscreen-button" data-fullscreen aria-pressed="false" aria-label="${L('全屏展示小节','Show section in fullscreen')} ${s.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg><span>${L('全屏','Fullscreen')}</span></button></div>${tabs.map(([id])=>`<section class="tab-content" id="${localId(s.id,id,'panel')}" data-panel="${id}" role="tabpanel" aria-labelledby="${localId(s.id,id,'tab')}" tabindex="0" hidden></section>`).join('')}<div class="section-foot"><span>${s.id} / ${course.sections.length} ${L('节','SECTIONS')}</span><a href="https://cinger007.github.io/vis/lesson-0${course.id}/#${sectionKey(s.id)}" target="_blank" rel="noreferrer">${L('原课程本节','Original section')} ↗</a><a href="#${sectionKey(s.id)}" data-section-top="${s.id}">${L('回到小节开头','Section top')} ↑</a></div></article>`).join('')}</div>
-    <nav class="section-pagination" aria-label="${L('前后章节','Adjacent lessons')}"><a href="${course.id>1?'#lesson-'+(course.id-1):'#home'}"><small>← ${L('上一章','Previous lesson')}</small><strong>${course.id>1?T(curriculum[course.id-2].title):L('课程首页','Course home')}</strong></a><a href="${course.id<5?'#lesson-'+(course.id+1):'#clinic'}"><small>${L('下一章','Next lesson')} →</small><strong>${course.id<5?T(curriculum[course.id].title):L('补充案例','Additional examples')}</strong></a></nav><p class="chapter-credit">${L('李昕 · 可视化导论','Li Xin · Introduction to visualization')}</p>
-    </div><aside class="page-outline" aria-label="${L('当前小节内容','Current section outline')}"></aside></div></main>`;
+  const clinicSection={1:'1.3',2:'2.2',3:'3.8',4:'4.4',5:'5.2'}[course.id];
+  app.innerHTML=header(course)+sidebar(course,section)+`<main id="main" class="course-main studio-course"><div class="reading-layout"><div class="course-article"><header class="chapter-intro"><div class="chapter-title"><p class="overline">LESSON 0${course.id} · ${course.word}</p><h1>${T(course.title)}</h1><p>${T(course.summary)}</p></div><div class="chapter-drawing" aria-hidden="true">${drawGlyph(course.id)}</div></header><details class="chapter-guide"><summary>${L('本章目录','Lesson contents')} · ${course.sections.length} ${L('小节','sections')}</summary><nav class="chapter-map">${course.sections.map(s=>`<a href="${link(s)}"><span>${s.id}</span>${T(s.title)}</a>`).join('')}</nav></details><div class="chapter-sections">${course.sections.map(s=>`<article class="course-section studio-section" id="${sectionKey(s.id)}" data-section="${s.id}" aria-labelledby="heading-${sectionKey(s.id)}"><header class="section-heading"><span class="section-number">${s.id}</span><div><p>${lang==='zh'?s.title.en:s.title.zh}</p><h2 id="heading-${sectionKey(s.id)}" tabindex="-1">${T(s.title)}</h2></div><button class="section-fullscreen-button" data-fullscreen aria-pressed="false" aria-label="${L('全屏展示小节','Show section in fullscreen')} ${s.id}"><span>${L('全屏','Fullscreen')}</span> ⤢</button></header><div class="studio-grid"><div class="studio-reading-pane"><nav class="reading-tools" aria-label="${L('阅读定位','Reading navigation')}"><a href="${link(s)}">${L('讲解','Explanation')}</a><a href="${link(s,'code')}">${L('关键代码','Key code')} <small>${codeGuide[s.id].length}</small></a><span>${L('讲解与图形同屏','Read alongside the graphic')}</span></nav><section data-panel="explain" id="${localId(s.id,'explain','panel')}">${scopedMarkup(explain(s),s,'explain')}</section><details class="code-fold" data-panel="code" id="${localId(s.id,'code','panel')}"><summary><span>〈/〉</span>${L('关键代码与关键点解释','Key code and explanations')}<small>${codeGuide[s.id].length} ${L('段','snippets')}</small></summary><div class="code-panel-inner">${scopedMarkup(codePanel(s),s,'code')}</div></details></div><aside class="studio-canvas-pane" data-panel="demo" id="${localId(s.id,'demo','panel')}" aria-label="${s.id} ${L('常驻交互画布','Persistent interactive canvas')}"><div class="studio-canvas-title"><span>${L('演示','DEMONSTRATION')}</span><a href="${link(s,'code')}" data-open-code>${L('对照代码','See code')} ↙</a></div><div class="demo-workspace" id="${localId(s.id,'demo','demo-workspace')}" data-local-id="demo-workspace"></div></aside></div>${s.id===clinicSection?`<details class="inline-clinic"><summary>${L('常见画法：比较与修复','Common mistakes: compare and repair')} <span>↗</span></summary><div class="chapter-clinic-mount"></div></details>`:''}<div class="section-foot"><a href="https://cinger007.github.io/vis/lesson-0${course.id}/#${sectionKey(s.id)}" target="_blank" rel="noreferrer">${L('原课程本节','Original section')} ↗</a><a href="#${sectionKey(s.id)}" data-section-top="${s.id}">${L('回到小节开头','Section top')} ↑</a></div></article>`).join('')}</div><nav class="section-pagination"><a href="${course.id>1?'#lesson-'+(course.id-1):'#home'}">← ${L('上一章','Previous lesson')}</a><a href="${course.id<5?'#lesson-'+(course.id+1):'#clinic'}">${L('下一章','Next lesson')} →</a></nav></div><aside class="page-outline"></aside></div></main>`;
   for(const s of course.sections){
     const root=document.getElementById(sectionKey(s.id));
-    const controller={section:s,root,tab:null,mounted:new Map()};controllers.set(s.id,controller);
+    const controller={section:s,root,tab:null,mounted:new Map(),step:null};controllers.set(s.id,controller);
     setPanel(controller,sectionTabs.get(s.id)||'explain');
-    root.querySelectorAll('[data-section-tab]').forEach((button,i)=>{
-      button.onclick=event=>{event.preventDefault();selectPanel(s,button.dataset.sectionTab);};
-      button.onkeydown=event=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(event.key)){
-        event.preventDefault();const target=event.key==='Home'?0:event.key==='End'?2:(i+(event.key==='ArrowRight'?1:2))%3;
-        selectPanel(s,panelTypes[target]);root.querySelectorAll('[role=tab]')[target].focus({preventScroll:true});
-      }};
-    });
     root.querySelector('[data-fullscreen]').onclick=()=>focusedSection?exitSectionFullscreen():enterSectionFullscreen(controller);
     root.querySelector('[data-section-top]').onclick=event=>{event.preventDefault();jumpTo(s);};
+    const fold=root.querySelector('.code-fold');fold.ontoggle=()=>{if(fold.open){mountSectionCode(controller);syncStudioCode(controller,controller.step);}};
+    root.querySelectorAll('[data-code-sync]').forEach(button=>button.onclick=()=>{
+      const index=Number(button.dataset.codeSync),steps=lessonSteps(s),match=steps.findIndex(step=>step.guide===index);
+      controller.mounted.get('demo').setStep(match<0?Math.min(steps.length-1,index):match);
+    });
+    const clinic=root.querySelector('.inline-clinic');if(clinic)clinic.ontoggle=()=>{if(clinic.open&&!controller.clinic){controller.clinic=mountClinic(clinic.querySelector('.chapter-clinic-mount'),{L,arrow,initialCase:course.id===3?1:course.id===5?2:0});}};
   }
   updateOutline(section.id);
-  const update=()=>{if(!scrollFrame)scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;if(focusedSection)return;const list=[...controllers.values()];const edge=document.querySelector('.course-header').getBoundingClientRect().height+130;const chosen=list.filter(item=>item.root.getBoundingClientRect().top<=edge).at(-1)||list[0];if(chosen)markCurrent(chosen.section.id);});};
-  window.addEventListener('scroll',update,{passive:true});
-  observer=new ResizeObserver(update);controllers.forEach(controller=>observer.observe(controller.root));
+  const update=()=>{if(!scrollFrame)scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;if(focusedSection)return;const list=[...controllers.values()],edge=document.querySelector('.course-header').offsetHeight+120,chosen=list.filter(item=>item.root.getBoundingClientRect().top<=edge).at(-1)||list[0];if(chosen)markCurrent(chosen.section.id);});};
+  window.addEventListener('scroll',update,{passive:true});observer=new ResizeObserver(update);controllers.forEach(controller=>observer.observe(controller.root));
   active={cleanup(){window.removeEventListener('scroll',update);observer?.disconnect();if(scrollFrame)cancelAnimationFrame(scrollFrame);scrollFrame=0;}};
 }
 
+function mountSectionCode(controller){
+  if(controller.mounted.has('code'))return;
+  controller.mounted.set('code',mountCode(controller.section,controller.root.querySelector('[data-panel=code]')));
+}
+
+function syncStudioCode(controller,step){
+  if(!step)return;const changed=controller.step&&controller.step.phase!==step.phase;controller.step=step;
+  if(changed){controller.root.querySelector('.code-fold').open=true;mountSectionCode(controller);}
+  let pattern;try{pattern=new RegExp(step.terms,'i');}catch{pattern=new RegExp(step.terms.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');}
+  controller.root.querySelectorAll('.code-walkthrough').forEach((block,i)=>{block.classList.toggle('code-step-active',i===step.guide);block.querySelectorAll('.code-line').forEach(line=>line.classList.toggle('highlighted',i===step.guide&&pattern.test(line.textContent)));});
+  if(changed)controller.root.querySelector('.code-step-active')?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+}
+
 function setPanel(controller,tab){
-  if(!panelTypes.includes(tab))tab='explain';
-  const {root,section}=controller,panel=root.querySelector(`[data-panel="${tab}"]`);
-  controller.tab=tab;sectionTabs.set(section.id,tab);
-  root.querySelectorAll('[role=tab]').forEach(button=>{const selected=button.dataset.sectionTab===tab;button.setAttribute('aria-selected',selected);button.tabIndex=selected?0:-1;});
-  root.querySelectorAll('[data-panel]').forEach(item=>item.hidden=item!==panel);
-  if(!controller.mounted.has(tab)){
-    panel.innerHTML=scopedMarkup(tab==='explain'?explain(section):tab==='code'?codePanel(section):demoPanel(section),section,tab);
-    let instance;
-    if(tab==='demo')instance=mountInteractive(find(panel,'demo-workspace'),section,lang,snapshots.get(section.id));
-    else if(tab==='code')instance=mountCode(section,panel);
-    else bindFigures(section,panel);
-    controller.mounted.set(tab,instance||{});
+  const {root,section}=controller,initial=!controller.mounted.has('demo');controller.tab=tab;sectionTabs.set(section.id,tab);
+  if(!controller.mounted.has('explain')){bindFigures(section,root.querySelector('[data-panel=explain]'));controller.mounted.set('explain',{});}
+  if(!controller.mounted.has('demo')){
+    const host=find(root.querySelector('[data-panel=demo]'),'demo-workspace');
+    controller.mounted.set('demo',mountStudio(host,section,lang,snapshots.get(section.id),step=>syncStudioCode(controller,step)));
   }
+  if(tab==='code'||initial&&codeSettings.get(section.id)?.foldOpen){root.querySelector('.code-fold').open=true;mountSectionCode(controller);syncStudioCode(controller,controller.step);}
 }
 
 function selectPanel(section,tab){
-  const controller=controllers.get(section.id),bar=controller.root.querySelector('.section-bar');
-  const top=bar.getBoundingClientRect().top;
+  const controller=controllers.get(section.id);
   setPanel(controller,tab);markCurrent(section.id);updateOutline(section.id);
   const url=writePanelState(new URL(location.href),currentCourse,sectionTabs);url.hash=link(section,tab);
   history.pushState(null,'',url);save('course-last-section',link(section,tab));
   // A sticky tab bar must not disappear when a long explanation is replaced
   // by a shorter demonstration. Other sections are left untouched.
-  if(!focusedSection&&top<document.querySelector('.course-header').offsetHeight+2)bar.scrollIntoView({block:'start',behavior:'instant'});
+  jumpTo(section,'',tab);
   if(focusedSection)controller.root.scrollTo({top:0,behavior:'instant'});
 }
 
@@ -142,7 +139,11 @@ function updateOutline(id){
 
 function jumpTo(section,anchor='',tab=sectionTabs.get(section.id)||'explain'){
   const controller=controllers.get(section.id);if(!controller)return;
-  const target=anchor?find(controller.root.querySelector(`[data-panel="${tab}"]`),anchor):controller.root;
+  if(tab==='code'&&anchor?.startsWith('keycode-')){
+    const index=Number(anchor.slice(8)),steps=lessonSteps(section),match=steps.findIndex(step=>step.guide===index),phase=match<0?Math.min(steps.length-1,index):match;
+    if(controller.step?.phase!==phase)controller.mounted.get('demo').setStep(phase);
+  }
+  const target=anchor?find(controller.root.querySelector(`[data-panel="${tab}"]`),anchor):tab==='code'?controller.root.querySelector('.code-fold'):tab==='demo'?controller.root.querySelector('[data-panel=demo]'):controller.root;
   (target||controller.root).scrollIntoView({block:'start',behavior:'instant'});markCurrent(section.id);updateOutline(section.id);
   if(anchor&&target){target.classList.remove('search-hit');void target.offsetWidth;target.classList.add('search-hit');target.tabIndex=target.tabIndex<0?-1:target.tabIndex;target.focus({preventScroll:true});}
 }
@@ -171,7 +172,7 @@ async function exitSectionFullscreen(){
 }
 function codePanel(section){
   const lab=codeLabs[section.api];
-  return `<div class="code-walkthroughs">${codeGuide[section.id].map((guide,i)=>`<section class="code-walkthrough" id="keycode-${i}"><header><span>${String(i+1).padStart(2,'0')}</span><h2>${T(guide.title)}</h2></header><div class="syntax-source"><div class="code-toolbar"><span>JavaScript / D3.js</span><button data-copy-snippet="${i}">${L('复制这段代码','Copy snippet')}</button></div><pre class="annotated-code guide-code" tabindex="0" aria-label="${T(guide.title)}"><code>${guideSource(guide,lang).split('\n').map((line,n)=>`<span class="code-line"><b aria-hidden="true">${n+1}</b><span>${highlight(line)}</span></span>`).join('')}</code></pre></div><div class="key-explanation"><h3>${L('关键点解释','Key-point explanation')}</h3><p>${T(guide.explanation)}</p></div></section>`).join('')}</div>
+  return `<div class="code-walkthroughs">${codeGuide[section.id].map((guide,i)=>`<section class="code-walkthrough" id="keycode-${i}"><header><span>${String(i+1).padStart(2,'0')}</span><h2>${T(guide.title)}</h2><button data-code-sync="${i}">${L('在图中查看','Show in graphic')} ↗</button></header><div class="syntax-source"><div class="code-toolbar"><span>JavaScript / D3.js</span><button data-copy-snippet="${i}">${L('复制这段代码','Copy snippet')}</button></div><pre class="annotated-code guide-code" tabindex="0" aria-label="${T(guide.title)}"><code>${guideSource(guide,lang).split('\n').map((line,n)=>`<span class="code-line"><b aria-hidden="true">${n+1}</b><span>${highlight(line)}</span></span>`).join('')}</code></pre></div><div class="key-explanation"><h3>${L('关键点解释','Key-point explanation')}</h3><p>${T(guide.explanation)}</p></div></section>`).join('')}</div>
     <section id="syntax-preview" class="syntax-preview"><div class="syntax-preview-heading"><h2>${L('运行示例：','Run example: ')}${T(lab.title)}</h2></div><p class="run-instruction">${L('调整参数并运行，观察图形和返回值。','Change the parameter, run the example and inspect the graphic and return value.')}</p>
     <details class="full-source"><summary>${L('查看完整运行代码','View the complete runnable code')}</summary><section id="syntax-source" class="syntax-source"><div class="code-toolbar"><span>${section.api}.js</span><label><input id="show-comments" type="checkbox" checked> ${L('显示注释','Show comments')}</label><button id="copy-code">${L('复制代码','Copy code')}</button></div><pre class="annotated-code" tabindex="0" aria-label="${L('完整运行代码','Complete runnable code')}"><code id="syntax-code"></code></pre></section></details>
     <div class="syntax-controls"><label><span>${T(lab.control)} <output id="syntax-value">${syntaxValues.get(section.id)??lab.value}</output></span><input id="syntax-parameter" type="range" min="${lab.min}" max="${lab.max}" value="${syntaxValues.get(section.id)??lab.value}" aria-label="${T(lab.control)}"></label><button class="primary" id="run-syntax">${L('运行示例','Run example')} ${arrow}</button><span id="syntax-status" role="status"></span></div><div id="syntax-canvas"></div><details class="syntax-output" open><summary>${L('返回值','Return value')}</summary><pre id="syntax-result"></pre></details></section>
@@ -197,7 +198,7 @@ function mountCode(section,panel){
   }
   q('syntax-parameter').oninput=e=>{q('syntax-value').textContent=e.target.value;syntaxValues.set(section.id,Number(e.target.value));};q('run-syntax').onclick=run;
   q('copy-code').onclick=async()=>{const button=q('copy-code');try{await navigator.clipboard.writeText(programSource(lab,lang));button.textContent=L('已复制','Copied');}catch{button.textContent=L('请选择代码复制','Select code to copy');}};
-  run();return {cleanup(){codeSettings.set(section.id,{open:panel.querySelector('.full-source').open,comments:q('show-comments').checked});disposed=true;svg.selectAll('*').interrupt();}};
+  run();return {cleanup(){codeSettings.set(section.id,{open:panel.querySelector('.full-source').open,comments:q('show-comments').checked,foldOpen:panel.open});disposed=true;svg.selectAll('*').interrupt();}};
 }
 function demoPanel(section){return `<div class="demo-intro"><h2>${L('交互演示','Interactive demonstration')}</h2><p>${T(section.watch)}</p></div><div id="demo-workspace" class="demo-workspace"></div><nav id="demo-observe" class="demo-related"><a href="${link(section)}">${L('返回本节讲解','Read the explanation')} ${arrow}</a><a href="${link(section,'code')}">${L('对照关键代码','See the key code')} ${arrow}</a></nav>`;}
 function bindFigures(section,panel){
@@ -251,10 +252,11 @@ function render(keepPosition=false){
   document.documentElement.classList.toggle('course-document',!!course);
   if(course){
     if(!reuse)lesson(course,section,tab);else for(const s of course.sections){const controller=controllers.get(s.id);if(controller.tab!==sectionTabs.get(s.id))setPanel(controller,sectionTabs.get(s.id));}
+    if(explicit)setPanel(controllers.get(section.id),tab);
     const canonical=writePanelState(new URL(location.href),course,sectionTabs);canonical.searchParams.set('lang',lang);history.replaceState(null,'',canonical);
     if(keepPosition&&previousSection&&controllers.has(previousSection)){const top=controllers.get(previousSection).root.getBoundingClientRect().top;window.scrollBy({top:top-previousOffset,behavior:'instant'});markCurrent(previousSection);}
     else if(explicit)jumpTo(section,anchor,sectionTabs.get(section.id));
-    else window.scrollTo({top:0,behavior:'instant'});
+    else jumpTo(section);
     save('course-last-section',link(section,sectionTabs.get(section.id)));
   }else if(page==='clinic'){
     app.innerHTML=header(null)+`<main id="main" class="additional-page"><p class="overline">ADDITIONAL EXAMPLES</p><h1>${L('图表诊断','Chart diagnostics')}</h1><p>${L('比较同一份数据的不同表达，找出坐标、颜色与缺失值带来的误读。','Compare representations of the same data and diagnose axes, color and missingness.')}</p><div id="clinic"></div></main>`+footer();active=mountClinic(document.querySelector('#clinic'),{L,arrow});

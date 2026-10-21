@@ -108,7 +108,7 @@ export function mountInteractive(host,section,lang,snapshot){
   }
   if(section.lab==='join')return mountJoin(host,lang,snapshot);
   render();
-  return {getState:()=>({state:structuredClone(state)}),source:()=>render.toString(),cleanup(){}};
+  return {getState:()=>({state:structuredClone(state)}),applyPreset(value){Object.assign(state,value);render();},source:()=>render.toString(),cleanup(){}};
 }
 
 function mountJoin(host,lang,snapshot){

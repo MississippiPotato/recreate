@@ -58,6 +58,26 @@ const groups = d3.group(long,d=>d.metric);
 
 `row.metric` accesses a literal field named metric, whereas `row[metric]` uses the variable’s value as the field name. The inner map creates measure records; flatMap combines them. Entity and measure jointly identify each cell.
 
+#### 3. Crime 1985: reshape and derive a comparison
+
+```javascript
+const rows = await d3.csv(url, row => ({
+  category: row['犯罪类型'], male: +row['男性'], female: +row['女性']
+}));
+// Add a difference ratio without changing source fields.
+const withRatio = rows.map(row => ({...row,
+  ratio: (row.male - row.female) / (row.male + row.female)
+}));
+const longRows = rows.flatMap(row => [
+  {category:row.category, gender:'male', value:row.male},
+  {category:row.category, gender:'female', value:row.female}
+]);
+```
+
+**Key-point explanation**
+
+The wide table has male and female columns. The long table stores the column identity in gender and its count in value. A difference ratio supports comparison across unequal totals; inspect source counts alongside it.
+
 ### Runnable example: flatMap and compound identity
 
 ```javascript
@@ -229,6 +249,22 @@ svg.append('path').datum(fitted)
 
 The model is `y = ax + b`. Centered x/y values determine slope a and intercept b. Evaluate the model at the two x endpoints to draw the fitted line. Unlike choosing a curve, this calculates model parameters.
 
+#### 3. Overlay ten curves on the same points
+
+```javascript
+const curves = [d3.curveLinear, d3.curveMonotoneX, d3.curveNatural,
+  d3.curveBasis, d3.curveCardinal, d3.curveCatmullRom.alpha(0.5),
+  d3.curveStep, d3.curveStepBefore, d3.curveStepAfter, d3.curveBundle.beta(0.85)];
+// Every path uses the same data and axes.
+svg.selectAll('path.interpolation').data(curves).join('path')
+  .attr('class','interpolation').attr('fill','none')
+  .attr('d', curve => d3.line().x(d => x(d[0])).y(d => y(d[1])).curve(curve)(points));
+```
+
+**Key-point explanation**
+
+The curve factory configures a line generator. Binding ten factories produces ten paths on shared scales. Plateaus expose Cardinal overshoot and MonotoneX monotonicity; Basis and Bundle need not pass through every sample.
+
 ### Runnable example: Line generators and curves
 
 ```javascript
@@ -305,6 +341,24 @@ console.log(lineAtAngle(45));
 **Key-point explanation**
 
 Convert degrees to radians with π/180. Cosine supplies the horizontal component and sine the vertical component. SVG y points downward, so subtract the sine term for an upward line. The four returned fields map to the line’s endpoint attributes.
+
+#### 3. Compute the mean absolute angle
+
+```javascript
+// Normalize points to 0–1; W and H are plot dimensions.
+const angles = d3.pairs(points, (a, b) => {
+  const dx = Math.abs(b[0] - a[0]) * W;
+  const dy = Math.abs(b[1] - a[1]) * H;
+  return Math.atan2(dy, dx) * 180 / Math.PI;
+});
+const meanAngle = d3.mean(angles);
+// Bisect H to approach a mean angle of 45°, keeping data fixed.
+console.log(meanAngle);
+```
+
+**Key-point explanation**
+
+Pairs produces adjacent segments. atan2 returns radians, converted to degrees by 180/π. The calculator uses an unweighted mean absolute angle. Changing H/W changes screen orientation while preserving source values.
 
 ### Runnable example: Changing slope through range
 
@@ -389,6 +443,23 @@ svg.selectAll('path.contour').data(contours).join('path').attr('class','contour'
 **Key-point explanation**
 
 Create and configure a contour generator, then call it with values. It returns MultiPolygons for threshold regions. `geoPath` converts the polygon geometry to SVG path data; fill shows the region and stroke its boundary.
+
+#### 3. Generate filled contours from a full field
+
+```javascript
+const rows = d3.csvParseRows(text, row => row.map(Number));
+const values = rows.flat();
+// Size is [columns, rows]; values are row-major.
+const contours = d3.contours().size([rows[0].length, rows.length])
+  .thresholds(d3.range(-20, 46, 5))(values);
+const path = d3.geoPath(d3.geoIdentity().scale(cellSize));
+svg.selectAll('path.contour').data(contours, d => d.value).join('path')
+  .attr('class','contour').attr('d',path).attr('fill',d => color(d.value));
+```
+
+**Key-point explanation**
+
+Each threshold produces a MultiPolygon covering values at or above it. GeoPath converts the geometry to an SVG path. The selected-cell view explains the local classification and edge interpolation behind the region boundary.
 
 ### Runnable example: The d3.contours input contract
 

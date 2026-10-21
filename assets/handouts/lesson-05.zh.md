@@ -351,6 +351,21 @@ function segmentPath(t0,t1) {
 
 外侧按起点到终点连接，内侧反向返回，最后用 Z 闭合。`side` 取 1 或 −1 控制内外偏移。这里用短直线近似小格边缘；缩小角度范围可以让近似更细。
 
+#### 4. 直角坐标到螺旋的连续插值
+
+```javascript
+const angle = day / period * 2 * Math.PI - Math.PI / 2;
+const radius = 27 + day * radiusStep;
+const polar = [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+// u 从 0 到 1；每个点保留自己的 key。
+const position = linear.map((coordinate, i) => coordinate + (polar[i] - coordinate) * u);
+circles.attr('cx', position[0]).attr('cy', position[1]);
+```
+
+**关键点解释**
+
+`u=0` 时使用直线坐标，`u=1` 时使用极坐标，之间是同一个点的位置插值。调整卷曲量不会改变记录值或编号；`period` 决定每圈承载多少天。
+
 ### 运行示例: 极坐标到笛卡尔坐标
 
 ```javascript

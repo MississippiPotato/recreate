@@ -382,6 +382,21 @@ for (const [className, count] of countByClass) console.log(className, count);
 
 Both functions return Map structures. Their innermost values differ: records for `group`, the reducer’s result for `rollup`. Iterating a Map with `for...of` yields `[key, value]` entries that can be destructured directly.
 
+#### 4. Move data blocks instead of rebuilding the canvas
+
+```javascript
+// IDs retain identity; filter selects the result.
+const kept = rows.filter(row => row.value > threshold);
+const blocks = svg.selectAll('g.block').data(kept, row => row.id).join('g');
+// Move the same node smoothly to its new position.
+blocks.interrupt().transition().duration(650)
+  .attr('transform', row => `translate(${x(row)},${y(row)})`);
+```
+
+**Key-point explanation**
+
+Keyed data binding reuses nodes for retained records. A transition interpolates old and new coordinates; interrupt an earlier transition before responding to another operation.
+
 ### Runnable example: filter → map → sum
 
 ```javascript

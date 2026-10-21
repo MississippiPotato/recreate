@@ -382,6 +382,21 @@ for (const [className, count] of countByClass) console.log(className, count);
 
 Both functions return Map structures. Their innermost values differ: records for `group`, the reducer’s result for `rollup`. Iterating a Map with `for...of` yields `[key, value]` entries that can be destructured directly.
 
+#### 4. Move data blocks instead of rebuilding the canvas
+
+```javascript
+// IDs retain identity; filter selects the result.
+const kept = rows.filter(row => row.value > threshold);
+const blocks = svg.selectAll('g.block').data(kept, row => row.id).join('g');
+// Move the same node smoothly to its new position.
+blocks.interrupt().transition().duration(650)
+  .attr('transform', row => `translate(${x(row)},${y(row)})`);
+```
+
+**Key-point explanation**
+
+Keyed data binding reuses nodes for retained records. A transition interpolates old and new coordinates; interrupt an earlier transition before responding to another operation.
+
 ### Runnable example: filter → map → sum
 
 ```javascript
@@ -1418,6 +1433,23 @@ console.log(genPalette(210,0.6,0.55));
 
 The inner `color` function reuses wrapping, bounds handling and formatting. Each entry derives from the base H/S/L through offsets or factors. The returned array can feed an ordinal range or swatch display.
 
+#### 2. Generate vivid and muted pairs
+
+```javascript
+const hues = [H, H + 30, H + 180];
+// Produce two saturations for each hue, retaining its identity.
+const pairs = hues.flatMap(hue => [
+  d3.hsl(hue, S / 100, L / 100).formatHex(),
+  d3.hsl(hue, S * 0.48 / 100, Math.min(95, L + 22) / 100).formatHex()
+]);
+const background = d3.hsl(H, S * 0.14 / 100, 0.92).formatHex();
+console.log([...pairs, background]);
+```
+
+**Key-point explanation**
+
+flatMap flattens two colors per hue into one array. D3 HSL saturation and lightness use 0–1, so convert percentage controls. Paired colors share a hue; the final low-saturation color supplies a background.
+
 ### Runnable example: Parameterized palette generation
 
 ```javascript
@@ -1475,6 +1507,23 @@ nodes.selectAll('text').data(d=>[d]).join('text').attr('x',10).text(d=>d.categor
 **Key-point explanation**
 
 `d3.symbol()` is a path generator. Set its type and then invoke it with `()` to obtain SVG path data. Each parent group has one record; `d => [d]` binds that record to each child mark. Text, shape and color identify the category together.
+
+#### 2. Simulate vision in linear RGB
+
+```javascript
+// Decode sRGB before applying the matrix.
+const linear = channel => channel <= 0.04045
+  ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+const rgb = [color.r, color.g, color.b].map(v => linear(v / 255));
+// Each row of the deuteranopia matrix produces one output channel.
+const matrix = [[0.367322,0.860646,-0.227968],
+  [0.280085,0.672501,0.047413],[-0.011820,0.042940,0.968881]];
+const simulated = matrix.map(row => row.reduce((sum, coefficient, i) => sum + coefficient * rgb[i], 0));
+```
+
+**Key-point explanation**
+
+Map produces output channels and reduce computes each dot product. Re-encode the result as sRGB and clamp it for display. The canvas compares three vision modes while retaining shapes and labels as independent encodings.
 
 ### Runnable example: Redundant shape and text
 
@@ -1564,6 +1613,26 @@ const groups = d3.group(long,d=>d.metric);
 **Key-point explanation**
 
 `row.metric` accesses a literal field named metric, whereas `row[metric]` uses the variable’s value as the field name. The inner map creates measure records; flatMap combines them. Entity and measure jointly identify each cell.
+
+#### 3. Crime 1985: reshape and derive a comparison
+
+```javascript
+const rows = await d3.csv(url, row => ({
+  category: row['犯罪类型'], male: +row['男性'], female: +row['女性']
+}));
+// Add a difference ratio without changing source fields.
+const withRatio = rows.map(row => ({...row,
+  ratio: (row.male - row.female) / (row.male + row.female)
+}));
+const longRows = rows.flatMap(row => [
+  {category:row.category, gender:'male', value:row.male},
+  {category:row.category, gender:'female', value:row.female}
+]);
+```
+
+**Key-point explanation**
+
+The wide table has male and female columns. The long table stores the column identity in gender and its count in value. A difference ratio supports comparison across unequal totals; inspect source counts alongside it.
 
 ### Runnable example: flatMap and compound identity
 
@@ -1736,6 +1805,22 @@ svg.append('path').datum(fitted)
 
 The model is `y = ax + b`. Centered x/y values determine slope a and intercept b. Evaluate the model at the two x endpoints to draw the fitted line. Unlike choosing a curve, this calculates model parameters.
 
+#### 3. Overlay ten curves on the same points
+
+```javascript
+const curves = [d3.curveLinear, d3.curveMonotoneX, d3.curveNatural,
+  d3.curveBasis, d3.curveCardinal, d3.curveCatmullRom.alpha(0.5),
+  d3.curveStep, d3.curveStepBefore, d3.curveStepAfter, d3.curveBundle.beta(0.85)];
+// Every path uses the same data and axes.
+svg.selectAll('path.interpolation').data(curves).join('path')
+  .attr('class','interpolation').attr('fill','none')
+  .attr('d', curve => d3.line().x(d => x(d[0])).y(d => y(d[1])).curve(curve)(points));
+```
+
+**Key-point explanation**
+
+The curve factory configures a line generator. Binding ten factories produces ten paths on shared scales. Plateaus expose Cardinal overshoot and MonotoneX monotonicity; Basis and Bundle need not pass through every sample.
+
 ### Runnable example: Line generators and curves
 
 ```javascript
@@ -1812,6 +1897,24 @@ console.log(lineAtAngle(45));
 **Key-point explanation**
 
 Convert degrees to radians with π/180. Cosine supplies the horizontal component and sine the vertical component. SVG y points downward, so subtract the sine term for an upward line. The four returned fields map to the line’s endpoint attributes.
+
+#### 3. Compute the mean absolute angle
+
+```javascript
+// Normalize points to 0–1; W and H are plot dimensions.
+const angles = d3.pairs(points, (a, b) => {
+  const dx = Math.abs(b[0] - a[0]) * W;
+  const dy = Math.abs(b[1] - a[1]) * H;
+  return Math.atan2(dy, dx) * 180 / Math.PI;
+});
+const meanAngle = d3.mean(angles);
+// Bisect H to approach a mean angle of 45°, keeping data fixed.
+console.log(meanAngle);
+```
+
+**Key-point explanation**
+
+Pairs produces adjacent segments. atan2 returns radians, converted to degrees by 180/π. The calculator uses an unweighted mean absolute angle. Changing H/W changes screen orientation while preserving source values.
 
 ### Runnable example: Changing slope through range
 
@@ -1896,6 +1999,23 @@ svg.selectAll('path.contour').data(contours).join('path').attr('class','contour'
 **Key-point explanation**
 
 Create and configure a contour generator, then call it with values. It returns MultiPolygons for threshold regions. `geoPath` converts the polygon geometry to SVG path data; fill shows the region and stroke its boundary.
+
+#### 3. Generate filled contours from a full field
+
+```javascript
+const rows = d3.csvParseRows(text, row => row.map(Number));
+const values = rows.flat();
+// Size is [columns, rows]; values are row-major.
+const contours = d3.contours().size([rows[0].length, rows.length])
+  .thresholds(d3.range(-20, 46, 5))(values);
+const path = d3.geoPath(d3.geoIdentity().scale(cellSize));
+svg.selectAll('path.contour').data(contours, d => d.value).join('path')
+  .attr('class','contour').attr('d',path).attr('fill',d => color(d.value));
+```
+
+**Key-point explanation**
+
+Each threshold produces a MultiPolygon covering values at or above it. GeoPath converts the geometry to an SVG path. The selected-cell view explains the local classification and edge interpolation behind the region boundary.
 
 ### Runnable example: The d3.contours input contract
 
@@ -2275,6 +2395,21 @@ function segmentPath(t0,t1) {
 **Key-point explanation**
 
 Follow the outer start to outer end, then return along the inner edge and close with Z. Side 1/−1 selects the radial offset. Short straight edges approximate each small cell; smaller angular spans refine the approximation.
+
+#### 4. Interpolate Cartesian coordinates into a spiral
+
+```javascript
+const angle = day / period * 2 * Math.PI - Math.PI / 2;
+const radius = 27 + day * radiusStep;
+const polar = [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+// u ranges from 0 to 1; each point retains its key.
+const position = linear.map((coordinate, i) => coordinate + (polar[i] - coordinate) * u);
+circles.attr('cx', position[0]).attr('cy', position[1]);
+```
+
+**Key-point explanation**
+
+At u=0 the point uses Cartesian coordinates; at u=1 it uses polar coordinates. Intermediate values interpolate the same point without changing its observation or key. Period controls days per turn.
 
 ### Runnable example: Polar to Cartesian coordinates
 

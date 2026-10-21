@@ -1,5 +1,6 @@
-// Each section owns its tab. The URL stores the other open tabs as well, so
-// refresh, shared links and browser history restore the same chapter view.
+// Old /code and /demo links now focus a region of the same shared workspace.
+// Keep the former `tabs` query readable for existing shared URLs and history;
+// the lecture and live canvas remain visible together regardless of focus.
 export const panelTypes = ['explain', 'code', 'demo'];
 export const sectionKey = id => `ch-${id.replace('.', '-')}`;
 export const localId = (id, tab, name) => `${sectionKey(id)}-${tab}-${name}`;
