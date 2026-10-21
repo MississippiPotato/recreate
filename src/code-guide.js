@@ -30,7 +30,7 @@ export const codeGuide={
           class: row['班级'].trim()
         };
       }
-    },'<code>transformRow</code> 接收一行对象，<code>return { ... }</code> 返回新的记录。<code>Number("18")</code> 与 <code>+"18"</code> 都得到数字 18；<code>trim()</code> 处理首尾空格；<code>utcParse</code> 按明确格式解释日期。把转换放在同一处，后续计算就不必反复判断字段类型。','<code>transformRow</code> receives one row and returns a new record. Both <code>Number("18")</code> and <code>+"18"</code> produce 18. <code>trim()</code> removes surrounding whitespace; <code>utcParse</code> parses the specified date format. Centralizing conversion gives later calculations consistent types.'),
+    },'<code>transformRow</code> 接收一行对象，<code>return { ... }</code> 返回新的记录。<code>Number("18")</code> 与 <code>+"18"</code> 都得到数字 18，后一种写法中的 <code>+</code> 是一元加运算符。两者都会把空字符串转成 0，因此先用 <code>trim()</code> 去掉首尾空格，再把空项单独记为 <code>null</code>。<code>utcParse</code> 按明确格式解释日期。把转换放在同一处，后续计算就不必反复判断字段类型。','<code>transformRow</code> receives one row and returns a new record. Both <code>Number("18")</code> and <code>+"18"</code> produce 18; the latter uses the unary plus operator. Both convert an empty string to zero, so first trim whitespace and handle a blank separately as <code>null</code>. <code>utcParse</code> parses the specified date format. Centralizing conversion gives later calculations consistent types.'),
     G('d3.csv 的行回调与 await','The d3.csv row callback and await',async function(){
       // transformRow 是上一段定义的函数，这里传函数本身。 ←→ Pass the transformRow function defined above, without invoking it.
       const url = new URL('../assets/data/original-students.csv', import.meta.url);

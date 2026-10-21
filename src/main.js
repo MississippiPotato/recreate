@@ -1,10 +1,12 @@
-import {curriculum,allSections,figures,B} from './course-data.js';
+import {curriculum,figures} from './course-data.js';
 import {codeLabs,programSource} from './code-labs.js';
-import {renderReading,readingOutline,readingMarkdown} from './reading-notes.js';
+import {renderReading,readingOutline} from './reading-notes.js';
 import {codeGuide,guideSource} from './code-guide.js';
 import {mountInteractive} from './interactive.js';
 import {mountIntro} from './intro.js';
 import {mountClinic} from './clinic.js';
+import {readCourseRoute,readPanelState,writePanelState,sectionHash,sectionKey,localId,panelTypes} from './course-navigation.js';
+import {buildSearchIndex,searchCourse,searchExcerpt} from './course-search.js';
 
 const app=document.querySelector('#app');
 const esc=value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
@@ -13,17 +15,21 @@ const save=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}ca
 const requested=new URLSearchParams(location.search).get('lang');
 let lang=requested==='en'?'en':requested==='zh'?'zh':read('seeing-language','zh');if(!['zh','en'].includes(lang))lang='zh';
 let active=null,last=null,searchOpen=false,zoom=read('course-text-size',false);
+let currentCourse=null,currentLanguage=lang,observer=null,focusedSection=null,scrollFrame=0,searchIndex=null;
+const controllers=new Map(),sectionTabs=new Map(),codeSettings=new Map();
 const snapshots=new Map(),syntaxValues=new Map();
 const L=(zh,en)=>lang==='zh'?zh:en,T=value=>typeof value==='string'?value:value?.[lang]??value?.zh??'';
-const link=(section,tab='explain')=>`#ch-${section.id.replace('.','-')}${tab==='explain'?'':'/'+tab}`;
+const link=sectionHash;
+const find=(root,id)=>root.querySelector(`[data-local-id="${id}"]`);
+function scopedMarkup(html,section,tab){return html.replace(/\sid="([^"]+)"/g,(_,id)=>` id="${localId(section.id,tab,id)}" data-local-id="${id}"`);}
+function bindModalEscape(dialog){
+  dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();dialog.close();}});
+  dialog.addEventListener('cancel',event=>{event.preventDefault();dialog.close();});
+}
 const arrow='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 const icon=kind=>({explain:'<path d="M4 5h6l2 2 2-2h6v14h-6l-2 2-2-2H4zM12 7v14"/>',code:'<path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/>',demo:'<path d="m7 4 13 8-13 8z"/>'}[kind]);
 function route(){
-  const hash=location.hash.slice(1),match=hash.match(/^ch-([1-5])-([1-8])(?:\/(explain|code|demo|step-[1-4]))?$/);
-  const id=Number(match?.[1]||hash.match(/^lesson-(\d)$/)?.[1]||(!hash&&location.pathname.match(/lesson-0([1-5])\//)?.[1])||0);
-  const course=curriculum.find(c=>c.id===id),section=course?.sections.find(s=>s.id===`${id}.${match?.[2]}`)||course?.sections[0];
-  const tab=['code','demo'].includes(match?.[3])?match[3]:match?.[3]==='step-2'?'demo':'explain';
-  return {course,section,tab,page:hash};
+  return readCourseRoute(new URL(location.href),curriculum);
 }
 function header(course){
   return `<header class="course-header"><a href="#home" class="site-brand" aria-label="${L('可视化导论，课程首页','Visualization, course home')}"><svg viewBox="0 0 36 36" aria-hidden="true"><path d="M7 27 15 10l14 11" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="7" cy="27" r="4"/><circle cx="15" cy="10" r="5" fill="#ec855a"/><circle cx="29" cy="21" r="4"/></svg><strong>${L('可视化导论','Visualization')}</strong><span>D3 / COURSE</span></a><nav class="global-nav" aria-label="${L('课程导航','Course navigation')}">${curriculum.map((c,i)=>`<a href="#lesson-${c.id}" ${course?.id===c.id?'aria-current="page"':''}><small>0${c.id}</small>${L(['数据','流程','色彩','低维','时序'][i],['Data','Pipeline','Color','Space','Time'][i])}</a>`).join('')}</nav><div class="header-tools"><button id="search-open" aria-label="${L('搜索课程','Search course')}"><span>⌕</span><i>${L('搜索','Search')}</i><kbd>Ctrl K</kbd></button><button id="text-size" aria-pressed="${zoom}" aria-label="${L('增大正文字号','Increase text size')}">A<span>+</span></button><button id="language">${L('EN','中文')}</button>${course?`<button id="mobile-menu" aria-expanded="false" aria-controls="course-sidebar">☰ <span class="sr-only">${L('课程目录','Contents')}</span></button>`:''}</div></header>`;
@@ -63,25 +69,105 @@ function explain(section){
   return `<div class="explanation-content"><div class="course-reading">${reading}</div>${gallery}<section class="observation" id="observation"><span>${L('配套演示','DEMONSTRATION')}</span><p>${T(section.watch)}</p><a href="${link(section,'demo')}">${L('打开本节演示','Open this demonstration')} ${arrow}</a></section></div>`;
 }
 function lesson(course,section,tab){
-  const index=allSections.findIndex(s=>s.id===section.id);
   const tabs=[['explain',L('讲解','Explanation')],['code',L('关键代码','Key code')],['demo',L('演示','Demonstration')]];
-  const outline=tab==='explain'?readingOutline(section.id,lang).map(item=>['#'+item.id,item.title]):tab==='code'?[...codeGuide[section.id].map((guide,i)=>['#keycode-'+i,T(guide.title)]),['#syntax-preview',L('运行示例','Run example')]]:[['#demo-workspace',L('交互演示','Interactive demonstration')],['#demo-observe',L('讲解与代码','Explanation and code')]];
-  app.innerHTML=header(course)+sidebar(course,section)+`<main id="main" class="course-main"><div class="reading-layout"><article class="course-article">
-    <div class="lesson-breadcrumb"><a href="#home">${L('课程首页','Course home')}</a><span>›</span><a href="#lesson-${course.id}">${T(course.title)}</a><span>› ${section.id}</span></div>
-    <header class="article-heading"><p class="overline">LESSON 0${course.id} / ${course.word}</p><h1><span>${section.id}</span>${T(section.title)}</h1></header>
-    <nav class="section-tabs" role="tablist" aria-label="${T(section.title)}">${tabs.map(([id,name])=>`<a href="${link(section,id)}" id="tab-${id}" role="tab" aria-selected="${tab===id}" aria-controls="panel-${id}" tabindex="${tab===id?0:-1}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${icon(id)}</svg>${name}</a>`).join('')}<button id="demo-fullscreen" title="${L('放大演示区','Enlarge demonstration')}" ${tab!=='demo'?'hidden':''}>⤢ <span>${L('放大','Enlarge')}</span></button></nav>
-    <section class="tab-content" id="panel-${tab}" role="tabpanel" aria-labelledby="tab-${tab}">${tab==='explain'?explain(section):tab==='code'?codePanel(section):demoPanel(section)}</section>
-    <nav class="section-pagination" aria-label="${L('前后小节','Adjacent sections')}"><a href="${index?link(allSections[index-1]):'#home'}"><small>← ${L('上一节','Previous')}</small><strong>${index?T(allSections[index-1].title):L('课程首页','Course home')}</strong></a><a href="${index<allSections.length-1?link(allSections[index+1]):'#clinic'}"><small>${L('下一节','Next')} →</small><strong>${index<allSections.length-1?T(allSections[index+1].title):L('补充案例','Additional examples')}</strong></a></nav>
-    <p class="section-credit"><a href="https://cinger007.github.io/vis/lesson-0${course.id}/#ch-${section.id.replace('.','-')}" target="_blank" rel="noreferrer">${L('查看原课程本节','Original course section')} ↗</a><span>JavaScript · D3.js</span></p>
-    </article><aside class="page-outline"><span>${L('本节内容','ON THIS PAGE')}</span>${outline.map(([url,label])=>`<a href="${url}" data-scroll="${url}">${label}</a>`).join('')}</aside></div></main>`;
-  document.querySelectorAll('[data-scroll]').forEach(a=>a.onclick=e=>{e.preventDefault();document.querySelector(a.dataset.scroll)?.scrollIntoView({behavior:'smooth',block:'start'});});
-  if(tab==='demo'){
-    const experiment=mountInteractive(document.querySelector('#demo-workspace'),section,lang,snapshots.get(section.id));
-    active={experiment,cleanup:experiment.cleanup};
-    document.querySelector('#demo-fullscreen').onclick=()=>{const expanded=document.body.classList.toggle('demo-expanded');document.querySelector('#demo-fullscreen').setAttribute('aria-pressed',expanded);document.querySelector('#demo-fullscreen').innerHTML=expanded?'⤡ '+L('还原','Restore'):'⤢ '+L('放大','Enlarge');};
-  }else if(tab==='code')mountCode(section);else bindFigures(section);
-  document.querySelectorAll('[role="tab"]').forEach((a,i)=>a.onkeydown=e=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(e.key)){e.preventDefault();const target=e.key==='Home'?0:e.key==='End'?2:(i+(e.key==='ArrowRight'?1:2))%3;location.hash=link(section,tabs[target][0]);}});
-  save('course-last-section',link(section,tab));
+  app.innerHTML=header(course)+sidebar(course,section)+`<main id="main" class="course-main"><div class="reading-layout"><div class="course-article">
+    <div class="lesson-breadcrumb"><a href="#home">${L('课程首页','Course home')}</a><span>／</span><span>${L('第','LESSON ')} ${course.id} ${L('章','')}</span></div>
+    <header class="chapter-intro"><div class="chapter-title"><p class="overline">LESSON 0${course.id} · ${course.word}</p><h1>${T(course.title)}</h1><p>${T(course.summary)}</p><div class="chapter-meta"><span>${String(course.sections.length).padStart(2,'0')} ${L('小节','SECTIONS')}</span><span>JavaScript + D3.js</span><a href="#${sectionKey(course.sections[0].id)}">${L('开始阅读','Begin reading')} ↓</a></div></div><div class="chapter-drawing" aria-hidden="true"><span>0${course.id}</span>${drawGlyph(course.id)}</div></header>
+    <nav class="chapter-map" aria-label="${L('本章小节','Sections in this lesson')}">${course.sections.map(s=>`<a href="${link(s)}"><span>${s.id}</span>${T(s.title)}</a>`).join('')}</nav>
+    <div class="chapter-sections">${course.sections.map(s=>`<article class="course-section" id="${sectionKey(s.id)}" data-section="${s.id}" aria-labelledby="heading-${sectionKey(s.id)}"><header class="section-heading"><span class="section-number">${s.id}</span><div><p>${lang==='zh'?s.title.en:s.title.zh}</p><h2 id="heading-${sectionKey(s.id)}" tabindex="-1">${T(s.title)}</h2></div></header><div class="section-bar"><nav class="section-tabs" role="tablist" aria-label="${s.id} ${T(s.title)}">${tabs.map(([id,name])=>`<a href="${link(s,id)}" id="${localId(s.id,id,'tab')}" role="tab" data-section-tab="${id}" aria-selected="false" aria-controls="${localId(s.id,id,'panel')}" tabindex="-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${icon(id)}</svg>${name}</a>`).join('')}</nav><button class="section-fullscreen-button" data-fullscreen aria-pressed="false" aria-label="${L('全屏展示小节','Show section in fullscreen')} ${s.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg><span>${L('全屏','Fullscreen')}</span></button></div>${tabs.map(([id])=>`<section class="tab-content" id="${localId(s.id,id,'panel')}" data-panel="${id}" role="tabpanel" aria-labelledby="${localId(s.id,id,'tab')}" tabindex="0" hidden></section>`).join('')}<div class="section-foot"><span>${s.id} / ${course.sections.length} ${L('节','SECTIONS')}</span><a href="https://cinger007.github.io/vis/lesson-0${course.id}/#${sectionKey(s.id)}" target="_blank" rel="noreferrer">${L('原课程本节','Original section')} ↗</a><a href="#${sectionKey(s.id)}" data-section-top="${s.id}">${L('回到小节开头','Section top')} ↑</a></div></article>`).join('')}</div>
+    <nav class="section-pagination" aria-label="${L('前后章节','Adjacent lessons')}"><a href="${course.id>1?'#lesson-'+(course.id-1):'#home'}"><small>← ${L('上一章','Previous lesson')}</small><strong>${course.id>1?T(curriculum[course.id-2].title):L('课程首页','Course home')}</strong></a><a href="${course.id<5?'#lesson-'+(course.id+1):'#clinic'}"><small>${L('下一章','Next lesson')} →</small><strong>${course.id<5?T(curriculum[course.id].title):L('补充案例','Additional examples')}</strong></a></nav><p class="chapter-credit">${L('李昕 · 可视化导论','Li Xin · Introduction to visualization')}</p>
+    </div><aside class="page-outline" aria-label="${L('当前小节内容','Current section outline')}"></aside></div></main>`;
+  for(const s of course.sections){
+    const root=document.getElementById(sectionKey(s.id));
+    const controller={section:s,root,tab:null,mounted:new Map()};controllers.set(s.id,controller);
+    setPanel(controller,sectionTabs.get(s.id)||'explain');
+    root.querySelectorAll('[data-section-tab]').forEach((button,i)=>{
+      button.onclick=event=>{event.preventDefault();selectPanel(s,button.dataset.sectionTab);};
+      button.onkeydown=event=>{if(['ArrowRight','ArrowLeft','Home','End'].includes(event.key)){
+        event.preventDefault();const target=event.key==='Home'?0:event.key==='End'?2:(i+(event.key==='ArrowRight'?1:2))%3;
+        selectPanel(s,panelTypes[target]);root.querySelectorAll('[role=tab]')[target].focus({preventScroll:true});
+      }};
+    });
+    root.querySelector('[data-fullscreen]').onclick=()=>focusedSection?exitSectionFullscreen():enterSectionFullscreen(controller);
+    root.querySelector('[data-section-top]').onclick=event=>{event.preventDefault();jumpTo(s);};
+  }
+  updateOutline(section.id);
+  const update=()=>{if(!scrollFrame)scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;if(focusedSection)return;const list=[...controllers.values()];const edge=document.querySelector('.course-header').getBoundingClientRect().height+130;const chosen=list.filter(item=>item.root.getBoundingClientRect().top<=edge).at(-1)||list[0];if(chosen)markCurrent(chosen.section.id);});};
+  window.addEventListener('scroll',update,{passive:true});
+  observer=new ResizeObserver(update);controllers.forEach(controller=>observer.observe(controller.root));
+  active={cleanup(){window.removeEventListener('scroll',update);observer?.disconnect();if(scrollFrame)cancelAnimationFrame(scrollFrame);scrollFrame=0;}};
+}
+
+function setPanel(controller,tab){
+  if(!panelTypes.includes(tab))tab='explain';
+  const {root,section}=controller,panel=root.querySelector(`[data-panel="${tab}"]`);
+  controller.tab=tab;sectionTabs.set(section.id,tab);
+  root.querySelectorAll('[role=tab]').forEach(button=>{const selected=button.dataset.sectionTab===tab;button.setAttribute('aria-selected',selected);button.tabIndex=selected?0:-1;});
+  root.querySelectorAll('[data-panel]').forEach(item=>item.hidden=item!==panel);
+  if(!controller.mounted.has(tab)){
+    panel.innerHTML=scopedMarkup(tab==='explain'?explain(section):tab==='code'?codePanel(section):demoPanel(section),section,tab);
+    let instance;
+    if(tab==='demo')instance=mountInteractive(find(panel,'demo-workspace'),section,lang,snapshots.get(section.id));
+    else if(tab==='code')instance=mountCode(section,panel);
+    else bindFigures(section,panel);
+    controller.mounted.set(tab,instance||{});
+  }
+}
+
+function selectPanel(section,tab){
+  const controller=controllers.get(section.id),bar=controller.root.querySelector('.section-bar');
+  const top=bar.getBoundingClientRect().top;
+  setPanel(controller,tab);markCurrent(section.id);updateOutline(section.id);
+  const url=writePanelState(new URL(location.href),currentCourse,sectionTabs);url.hash=link(section,tab);
+  history.pushState(null,'',url);save('course-last-section',link(section,tab));
+  // A sticky tab bar must not disappear when a long explanation is replaced
+  // by a shorter demonstration. Other sections are left untouched.
+  if(!focusedSection&&top<document.querySelector('.course-header').offsetHeight+2)bar.scrollIntoView({block:'start',behavior:'instant'});
+  if(focusedSection)controller.root.scrollTo({top:0,behavior:'instant'});
+}
+
+function markCurrent(id){
+  if(!controllers.has(id))return;
+  document.querySelectorAll('.course-sidebar nav a').forEach(a=>{const selected=a.hash===link(controllers.get(id).section);if(selected)a.setAttribute('aria-current','location');else a.removeAttribute('aria-current');});
+  if(last!==id){last=id;updateOutline(id);}
+  const section=controllers.get(id).section;document.title=`${T(currentCourse.title)} · ${id} ${T(section.title)} · ${L('可视化导论','Visualization')}`;
+}
+
+function updateOutline(id){
+  const controller=controllers.get(id),outline=document.querySelector('.page-outline');if(!controller||!outline)return;
+  const {section,tab}=controller;
+  const items=tab==='explain'?readingOutline(id,lang).map(item=>[item.id,item.title]):tab==='code'?[...codeGuide[id].map((guide,i)=>['keycode-'+i,T(guide.title)]),['syntax-preview',L('运行示例','Run example')]]:[['demo-workspace',L('交互演示','Interactive demonstration')]];
+  outline.innerHTML=`<span>${L('当前小节','CURRENT SECTION')}</span><strong>${id} ${T(section.title)}</strong>${items.map(([anchor,title])=>`<a href="${link(section,tab,anchor)}">${title}</a>`).join('')}`;
+}
+
+function jumpTo(section,anchor='',tab=sectionTabs.get(section.id)||'explain'){
+  const controller=controllers.get(section.id);if(!controller)return;
+  const target=anchor?find(controller.root.querySelector(`[data-panel="${tab}"]`),anchor):controller.root;
+  (target||controller.root).scrollIntoView({block:'start',behavior:'instant'});markCurrent(section.id);updateOutline(section.id);
+  if(anchor&&target){target.classList.remove('search-hit');void target.offsetWidth;target.classList.add('search-hit');target.tabIndex=target.tabIndex<0?-1:target.tabIndex;target.focus({preventScroll:true});}
+}
+
+async function enterSectionFullscreen(controller){
+  const inert=[];let node=controller.root;
+  while(node.parentElement){for(const sibling of node.parentElement.children)if(sibling!==node&&!sibling.inert){sibling.inert=true;inert.push(sibling);}node=node.parentElement;if(node===document.body)break;}
+  focusedSection={controller,scroll:window.scrollY,trigger:document.activeElement,inert};
+  document.body.classList.add('section-fullscreen');controller.root.classList.add('section-focused');
+  const button=controller.root.querySelector('[data-fullscreen]');button.setAttribute('aria-pressed','true');button.setAttribute('aria-label',L('退出小节全屏','Exit section fullscreen'));button.querySelector('span').textContent=L('退出全屏','Exit fullscreen');
+  controller.root.scrollTop=0;button.focus({preventScroll:true});
+  if(controller.root.requestFullscreen){try{await controller.root.requestFullscreen();}catch{/* The in-page expanded view remains available. */}}
+}
+
+function restoreSectionFullscreen(){
+  if(!focusedSection)return;const {controller,scroll,trigger,inert}=focusedSection;focusedSection=null;
+  inert.forEach(node=>node.inert=false);
+  controller.root.classList.remove('section-focused');document.body.classList.remove('section-fullscreen');
+  const button=controller.root.querySelector('[data-fullscreen]');button.setAttribute('aria-pressed','false');button.setAttribute('aria-label',`${L('全屏展示小节','Show section in fullscreen')} ${controller.section.id}`);button.querySelector('span').textContent=L('全屏','Fullscreen');
+  window.scrollTo({top:scroll,behavior:'instant'});if(trigger?.isConnected)trigger.focus({preventScroll:true});
+}
+
+async function exitSectionFullscreen(){
+  if(document.fullscreenElement){try{await document.exitFullscreen();}catch{}}
+  restoreSectionFullscreen();
 }
 function codePanel(section){
   const lab=codeLabs[section.api];
@@ -95,56 +181,105 @@ function highlight(line){
   const pattern=/\/\/.*$|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\b(?:const|let|return|function|async|await|if|else|new|true|false|null|undefined|typeof)\b|\b\d+(?:\.\d+)?\b/g;
   let cursor=0,result='';for(const m of line.matchAll(pattern)){result+=esc(line.slice(cursor,m.index));const token=m[0],kind=token.startsWith('//')?'comment':/^["'`]/.test(token)?'string':/^\d/.test(token)?'number':'keyword';result+=`<span class="token-${kind}">${esc(token)}</span>`;cursor=m.index+token.length;}return result+esc(line.slice(cursor));
 }
-function mountCode(section){
-  const lab=codeLabs[section.api],target=document.querySelector('#syntax-code');let disposed=false,running=0;
-  function paintCode(){const comments=document.querySelector('#show-comments').checked,source=programSource(lab,lang);target.innerHTML=source.split('\n').filter(line=>comments||!line.trim().startsWith('//')).map((line,i)=>`<span class="code-line"><b aria-hidden="true">${i+1}</b><span>${highlight(line)}</span></span>`).join('');}
-  paintCode();document.querySelector('#show-comments').onchange=paintCode;
-  document.querySelectorAll('[data-copy-snippet]').forEach(button=>button.onclick=async()=>{try{await navigator.clipboard.writeText(guideSource(codeGuide[section.id][Number(button.dataset.copySnippet)],lang));button.textContent=L('已复制','Copied');}catch{button.textContent=L('请选择代码复制','Select code to copy');}});
-  document.querySelectorAll('[data-code-note]').forEach(b=>b.onclick=()=>{const note=lab.notes[Number(b.dataset.codeNote)],token=note.term.match(/[a-zA-Z_$][\w$]*(?:\.[\w$]+)?/)?.[0];document.querySelectorAll('.code-line').forEach(line=>line.classList.toggle('highlighted',!!token&&line.textContent.includes(token)));});
-  const svg=window.d3.select('#syntax-canvas').append('svg').attr('viewBox','0 0 600 210').attr('role','img').attr('aria-label',T(lab.title));
+function mountCode(section,panel){
+  const lab=codeLabs[section.api],target=find(panel,'syntax-code'),q=id=>find(panel,id),settings=codeSettings.get(section.id)||{};let disposed=false,running=0;
+  if(settings.open)panel.querySelector('.full-source').open=true;
+  q('show-comments').checked=settings.comments!==false;
+  function paintCode(){const comments=q('show-comments').checked,source=programSource(lab,lang);target.innerHTML=source.split('\n').filter(line=>comments||!line.trim().startsWith('//')).map((line,i)=>`<span class="code-line"><b aria-hidden="true">${i+1}</b><span>${highlight(line)}</span></span>`).join('');}
+  paintCode();q('show-comments').onchange=paintCode;
+  panel.querySelectorAll('[data-copy-snippet]').forEach(button=>button.onclick=async()=>{try{await navigator.clipboard.writeText(guideSource(codeGuide[section.id][Number(button.dataset.copySnippet)],lang));button.textContent=L('已复制','Copied');}catch{button.textContent=L('请选择代码复制','Select code to copy');}});
+  const svg=window.d3.select(q('syntax-canvas')).append('svg').attr('viewBox','0 0 600 210').attr('role','img').attr('aria-label',T(lab.title));
   async function run(){
-    const ticket=++running,n=Number(document.querySelector('#syntax-parameter').value);syntaxValues.set(section.id,n);
-    const status=document.querySelector('#syntax-status'),result=document.querySelector('#syntax-result'),runButton=document.querySelector('#run-syntax');status.textContent=L('运行中…','Running…');status.dataset.ok='';runButton.disabled=true;
+    const ticket=++running,n=Number(q('syntax-parameter').value);syntaxValues.set(section.id,n);
+    const status=q('syntax-status'),result=q('syntax-result'),runButton=q('run-syntax');status.textContent=L('运行中…','Running…');status.dataset.ok='';runButton.disabled=true;
     if(!lab.persistent)svg.selectAll('*').remove();
     try{const value=await lab.run({svg,d3:window.d3,n,L});if(disposed||ticket!==running)return;result.textContent=typeof value==='string'?value:JSON.stringify(value,null,2);status.textContent=L('已运行','Executed');status.dataset.ok='true';}catch(error){if(disposed)return;result.textContent=error.message;status.textContent=L('运行失败','Run failed');status.dataset.ok='false';}finally{if(!disposed&&ticket===running)runButton.disabled=false;}
   }
-  document.querySelector('#syntax-parameter').oninput=e=>{document.querySelector('#syntax-value').textContent=e.target.value;};document.querySelector('#run-syntax').onclick=run;
-  document.querySelector('#copy-code').onclick=async()=>{const button=document.querySelector('#copy-code');try{await navigator.clipboard.writeText(programSource(lab,lang));button.textContent=L('已复制','Copied');}catch{button.textContent=L('请选择代码复制','Select code to copy');}};
-  active={cleanup(){disposed=true;svg.selectAll('*').interrupt();}};run();
+  q('syntax-parameter').oninput=e=>{q('syntax-value').textContent=e.target.value;syntaxValues.set(section.id,Number(e.target.value));};q('run-syntax').onclick=run;
+  q('copy-code').onclick=async()=>{const button=q('copy-code');try{await navigator.clipboard.writeText(programSource(lab,lang));button.textContent=L('已复制','Copied');}catch{button.textContent=L('请选择代码复制','Select code to copy');}};
+  run();return {cleanup(){codeSettings.set(section.id,{open:panel.querySelector('.full-source').open,comments:q('show-comments').checked});disposed=true;svg.selectAll('*').interrupt();}};
 }
 function demoPanel(section){return `<div class="demo-intro"><h2>${L('交互演示','Interactive demonstration')}</h2><p>${T(section.watch)}</p></div><div id="demo-workspace" class="demo-workspace"></div><nav id="demo-observe" class="demo-related"><a href="${link(section)}">${L('返回本节讲解','Read the explanation')} ${arrow}</a><a href="${link(section,'code')}">${L('对照关键代码','See the key code')} ${arrow}</a></nav>`;}
-function bindFigures(section){
+function bindFigures(section,panel){
   if(!section.figures?.length)return;
-  document.querySelectorAll('[data-figure]').forEach(b=>b.onclick=()=>{const f=figures[b.dataset.figure];document.querySelectorAll('[data-figure]').forEach(x=>x.setAttribute('aria-pressed',x===b));const image=document.querySelector('#course-figure img');image.src=new URL('../assets/figures/'+f.file,import.meta.url).href;image.alt=T(f.caption);document.querySelector('#course-figure figcaption').textContent=T(f.caption);});
-  document.querySelector('#enlarge-figure').onclick=()=>{const image=document.querySelector('#course-figure img');const dialog=document.createElement('dialog');dialog.className='image-dialog';dialog.innerHTML=`<button aria-label="${L('关闭原图','Close figure')}">×</button><img src="${image.src}" alt="${esc(image.alt)}"><p>${esc(image.alt)}</p>`;document.body.append(dialog);dialog.showModal();dialog.querySelector('button').onclick=()=>dialog.close();dialog.onclose=()=>{dialog.remove();document.querySelector('#enlarge-figure')?.focus();};dialog.onclick=e=>{if(e.target===dialog)dialog.close();};};
+  panel.querySelectorAll('[data-figure]').forEach(b=>b.onclick=()=>{const f=figures[b.dataset.figure];panel.querySelectorAll('[data-figure]').forEach(x=>x.setAttribute('aria-pressed',x===b));const image=find(panel,'course-figure').querySelector('img');image.src=new URL('../assets/figures/'+f.file,import.meta.url).href;image.alt=T(f.caption);find(panel,'course-figure').querySelector('figcaption').textContent=T(f.caption);});
+  find(panel,'enlarge-figure').onclick=()=>{const image=find(panel,'course-figure').querySelector('img');const dialog=document.createElement('dialog');dialog.className='image-dialog';dialog.innerHTML=`<button aria-label="${L('关闭原图','Close figure')}">×</button><img src="${image.src}" alt="${esc(image.alt)}"><p>${esc(image.alt)}</p>`;(focusedSection?.controller.root||document.body).append(dialog);dialog.showModal();dialog.querySelector('button').onclick=()=>dialog.close();dialog.onclose=()=>{dialog.remove();find(panel,'enlarge-figure')?.focus({preventScroll:true});};dialog.onclick=e=>{if(e.target===dialog)dialog.close();};};
 }
 function searchDialog(){
   if(searchOpen)return;searchOpen=true;
-  const dialog=document.createElement('dialog');dialog.className='search-dialog';dialog.innerHTML=`<div><span>⌕</span><input type="search" id="course-search" aria-label="${L('搜索概念或语法','Search concepts or syntax')}" placeholder="${L('搜索章节、概念或 D3 API…','Search lessons, concepts or D3 APIs…')}"><button aria-label="${L('关闭搜索','Close search')}">Esc</button></div><nav id="search-results"></nav>`;document.body.append(dialog);
+  searchIndex??=buildSearchIndex();
+  const previous=document.activeElement,dialog=document.createElement('dialog');let selected=0,found=[],navigating=false;
+  dialog.className='search-dialog';dialog.setAttribute('aria-label',L('搜索课程内容','Search course materials'));bindModalEscape(dialog);
+  dialog.innerHTML=`<div class="search-input-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><input type="search" id="course-search" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="search-results" aria-label="${L('搜索概念或语法','Search concepts or syntax')}" placeholder="${L('搜索概念、函数或一段代码…','Search a concept, function or code…')}"><button aria-label="${L('关闭搜索','Close search')}">Esc</button></div><div class="search-summary" role="status"></div><nav id="search-results" role="listbox" aria-label="${L('搜索结果','Search results')}"></nav><footer><span>↑ ↓ ${L('选择','Select')}　↵ ${L('打开','Open')}</span><span>${L('讲解 / 关键代码 / 演示','Explanation / Code / Demo')}</span></footer>`;
+  (focusedSection?.controller.root||document.body).append(dialog);
   const input=dialog.querySelector('input'),results=dialog.querySelector('nav');
-  function list(){const q=input.value.trim().toLowerCase();const found=allSections.filter(s=>(s.id+s.title.zh+s.title.en+readingMarkdown(s.id,'zh')+readingMarkdown(s.id,'en')+codeGuide[s.id].map(g=>g.title.zh+g.title.en+guideSource(g,'en')).join(' ')).toLowerCase().includes(q));results.innerHTML=found.length?found.map(s=>`<a href="${link(s)}"><span>${s.id}</span><strong>${T(s.title)}</strong><small>${s.api}</small></a>`).join(''):`<p>${L('没有找到相关小节。','No matching section.')}</p>`;results.querySelectorAll('a').forEach(a=>a.onclick=()=>dialog.close());}
-  input.oninput=list;dialog.querySelector('button').onclick=()=>dialog.close();dialog.onclose=()=>{searchOpen=false;dialog.remove();document.querySelector('#search-open')?.focus();};dialog.onclick=e=>{if(e.target===dialog)dialog.close();};list();dialog.showModal();input.focus();
+  const names={explain:L('讲解','Explanation'),code:L('关键代码','Key code'),demo:L('演示','Demo')};
+  function choose(index){selected=index;results.querySelectorAll('a').forEach((a,i)=>a.setAttribute('aria-selected',i===index));if(found.length)input.setAttribute('aria-activedescendant',`search-result-${index}`);else input.removeAttribute('aria-activedescendant');}
+  function open(index){
+    const item=found[index];if(!item)return;navigating=true;dialog.close();
+    const course=curriculum.find(c=>c.id===item.section.courseId)||curriculum.find(c=>c.sections.some(s=>s.id===item.section.id));
+    sectionTabs.set(item.section.id,item.tab);const url=writePanelState(new URL(location.href),course,sectionTabs);url.hash=link(item.section,item.tab,item.anchor);
+    history.pushState(null,'',url);render();
+  }
+  function list(){
+    found=searchCourse(searchIndex,input.value,lang);
+    dialog.querySelector('.search-summary').textContent=input.value.trim()?L(`找到 ${found.length} 条内容`,'Found '+found.length+' results'):L('从课程内容开始','Browse course materials');
+    results.innerHTML=found.length?found.map((item,i)=>`<a id="search-result-${i}" role="option" aria-selected="false" href="${link(item.section,item.tab,item.anchor)}"><div class="search-result-meta"><span class="result-type result-${item.tab}">${names[item.tab]}</span><span>${item.section.id} · ${T(item.section.title)}</span></div><strong>${esc(T(item.title))}</strong><p>${searchExcerpt(item,input.value,lang).map(run=>run.match?`<mark>${esc(run.text)}</mark>`:esc(run.text)).join('')}</p></a>`).join(''):`<p class="search-empty">${L('没有找到相关内容。可以试试函数名，例如 rollup 或 scaleLinear。','No results. Try a function name such as rollup or scaleLinear.')}</p>`;
+    results.querySelectorAll('a').forEach((a,i)=>{a.onclick=event=>{event.preventDefault();open(i);};a.onfocus=()=>choose(i);});choose(0);
+  }
+  input.oninput=list;input.onkeydown=event=>{
+    if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();if(found.length){choose((selected+(event.key==='ArrowDown'?1:found.length-1))%found.length);results.children[selected].scrollIntoView({block:'nearest'});}}
+    if(event.key==='Enter'){event.preventDefault();open(selected);}
+  };
+  dialog.querySelector('button').onclick=()=>dialog.close();dialog.onclose=()=>{searchOpen=false;dialog.remove();if(!navigating&&previous?.isConnected)previous.focus({preventScroll:true});};dialog.onclick=e=>{if(e.target===dialog)dialog.close();};list();dialog.showModal();input.focus();
 }
 function render(keepPosition=false){
-  const position=window.scrollY,focusTab=document.activeElement?.getAttribute('role')==='tab';if(active?.experiment&&last)snapshots.set(last,active.experiment.getState());active?.cleanup?.();active=null;
+  const position=window.scrollY,previousSection=last,previousOffset=controllers.get(last)?.root.getBoundingClientRect().top;
+  const {course,section,tab,page,anchor,explicit}=route();
+  if(course){const states=readPanelState(new URL(location.href),course,sectionTabs);if(explicit)states.set(section.id,tab);states.forEach((value,key)=>sectionTabs.set(key,value));}
+  const reuse=course&&currentCourse?.id===course.id&&currentLanguage===lang;
+  if(!reuse){
+    if(focusedSection){if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});restoreSectionFullscreen();}
+    for(const controller of controllers.values())for(const [type,instance] of controller.mounted){if(type==='demo'&&instance.getState)snapshots.set(controller.section.id,instance.getState());instance.cleanup?.();}
+    controllers.clear();active?.cleanup?.();active=null;last=null;
+  }else if(focusedSection&&focusedSection.controller.section.id!==section.id){if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});restoreSectionFullscreen();}
   document.querySelectorAll('dialog').forEach(d=>d.close());
-  document.body.classList.remove('demo-expanded','sidebar-open');document.body.classList.toggle('large-text',zoom);
-  const {course,section,tab,page}=route();last=section?.id||null;document.documentElement.lang=lang==='zh'?'zh-CN':'en';document.title=section?`${section.id} ${T(section.title)} · ${L('可视化导论','Visualization')}`:L('可视化导论 · JavaScript + D3.js','Visualization · JavaScript + D3.js');
+  document.body.classList.remove('sidebar-open');document.body.classList.toggle('large-text',zoom);
+  currentCourse=course;currentLanguage=lang;document.documentElement.lang=lang==='zh'?'zh-CN':'en';
+  document.title=course?`${T(course.title)} · ${L('可视化导论','Visualization')}`:L('可视化导论 · JavaScript + D3.js','Visualization · JavaScript + D3.js');
   document.body.classList.toggle('is-course',!!course);
-  if(course)lesson(course,section,tab);else if(page==='clinic'){
+  document.documentElement.classList.toggle('course-document',!!course);
+  if(course){
+    if(!reuse)lesson(course,section,tab);else for(const s of course.sections){const controller=controllers.get(s.id);if(controller.tab!==sectionTabs.get(s.id))setPanel(controller,sectionTabs.get(s.id));}
+    const canonical=writePanelState(new URL(location.href),course,sectionTabs);canonical.searchParams.set('lang',lang);history.replaceState(null,'',canonical);
+    if(keepPosition&&previousSection&&controllers.has(previousSection)){const top=controllers.get(previousSection).root.getBoundingClientRect().top;window.scrollBy({top:top-previousOffset,behavior:'instant'});markCurrent(previousSection);}
+    else if(explicit)jumpTo(section,anchor,sectionTabs.get(section.id));
+    else window.scrollTo({top:0,behavior:'instant'});
+    save('course-last-section',link(section,sectionTabs.get(section.id)));
+  }else if(page==='clinic'){
     app.innerHTML=header(null)+`<main id="main" class="additional-page"><p class="overline">ADDITIONAL EXAMPLES</p><h1>${L('图表诊断','Chart diagnostics')}</h1><p>${L('比较同一份数据的不同表达，找出坐标、颜色与缺失值带来的误读。','Compare representations of the same data and diagnose axes, color and missingness.')}</p><div id="clinic"></div></main>`+footer();active=mountClinic(document.querySelector('#clinic'),{L,arrow});
   }else home();
-  document.querySelector('#language').onclick=()=>{lang=lang==='zh'?'en':'zh';save('seeing-language',lang);const url=new URL(location.href);url.searchParams.delete('lang');history.replaceState(null,'',url);render(true);};
+  document.querySelector('#language').onclick=()=>{lang=lang==='zh'?'en':'zh';save('seeing-language',lang);const url=new URL(location.href);url.searchParams.set('lang',lang);history.replaceState(null,'',url);render(true);};
   document.querySelector('#text-size').onclick=()=>{zoom=!zoom;save('course-text-size',zoom);document.body.classList.toggle('large-text',zoom);document.querySelector('#text-size').setAttribute('aria-pressed',zoom);};
   document.querySelector('#search-open').onclick=searchDialog;
   document.querySelector('.skip-link').onclick=event=>{event.preventDefault();const main=document.querySelector('#main');main.tabIndex=-1;main.focus({preventScroll:true});main.scrollIntoView({block:'start',behavior:'instant'});};
   if(document.querySelector('#mobile-menu')){document.querySelector('#mobile-menu').onclick=()=>{const open=document.body.classList.toggle('sidebar-open');document.querySelector('#mobile-menu').setAttribute('aria-expanded',open);};document.querySelector('.sidebar-shade').onclick=()=>{document.body.classList.remove('sidebar-open');document.querySelector('#mobile-menu').setAttribute('aria-expanded',false);};}
-  if(keepPosition)window.scrollTo({top:position,behavior:'instant'});else if(page!=='path')window.scrollTo({top:0,behavior:'instant'});
-  if(course&&focusTab)document.querySelector('#tab-'+tab)?.focus({preventScroll:true});
+  if(!course){if(keepPosition)window.scrollTo({top:position,behavior:'instant'});else if(page!=='path')window.scrollTo({top:0,behavior:'instant'});}
 }
 window.addEventListener('hashchange',()=>render());
+window.addEventListener('popstate',()=>render());
+document.addEventListener('click',event=>{
+  if(event.defaultPrevented||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||event.button!==0)return;
+  const a=event.target.closest('a[href^="#"]');if(!a||a.target||a.hasAttribute('download'))return;
+  const url=new URL(a.href),next=readCourseRoute(url,curriculum);if(!next.course)return;
+  event.preventDefault();
+  if(a.closest('.course-sidebar nav,.chapter-map,.chapter-meta'))url.hash=link(next.section,sectionTabs.get(next.section.id)||'explain');
+  if(currentCourse?.id!==next.course.id)url.searchParams.delete('tabs');
+  if(url.href!==location.href)history.pushState(null,'',url);render();
+});
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement&&focusedSection){focusedSection.controller.root.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());restoreSectionFullscreen();}});
 window.addEventListener('keydown',event=>{
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();searchDialog();}
-  if(event.key==='Escape'){document.body.classList.remove('demo-expanded','sidebar-open');const b=document.querySelector('#demo-fullscreen');if(b)b.innerHTML='⤢ '+L('放大','Enlarge');document.querySelector('#mobile-menu')?.setAttribute('aria-expanded',false);}
+  if(event.key==='Escape'&&!document.querySelector('dialog[open]')){if(focusedSection)exitSectionFullscreen();document.body.classList.remove('sidebar-open');document.querySelector('#mobile-menu')?.setAttribute('aria-expanded',false);}
 });
 if(window.d3)render();else window.addEventListener('load',()=>render(),{once:true});

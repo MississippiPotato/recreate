@@ -66,7 +66,7 @@ function transformRow(row) {
 
 **Key-point explanation**
 
-`transformRow` receives one row and returns a new record. Both `Number("18")` and `+"18"` produce 18. `trim()` removes surrounding whitespace; `utcParse` parses the specified date format. Centralizing conversion gives later calculations consistent types.
+`transformRow` receives one row and returns a new record. Both `Number("18")` and `+"18"` produce 18; the latter uses the unary plus operator. Both convert an empty string to zero, so first trim whitespace and handle a blank separately as `null`. `utcParse` parses the specified date format. Centralizing conversion gives later calculations consistent types.
 
 #### 3. The d3.csv row callback and await
 
