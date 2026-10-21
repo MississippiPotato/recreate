@@ -32,7 +32,7 @@ export const prompts = {
 };
 
 const overrides = {
-  '1.1': p('合成样本里的平均分，能代表真实学生吗？','Can synthetic averages represent real students?','能，有 80 条记录就够了','Yes, 80 records are enough','不能，需要真实采样依据','No, real sampling evidence is needed',1,'看图之前，先问数据从哪里来。','Before reading a chart, ask where its data came from.',{selected:'S017'}),
+  '1.1': p('CSV 默认读入的成绩字段是什么类型？','What is the default type of a score loaded from CSV?','字符串','String','数值','Number',0,'读入后用行回调完成类型转换。','Convert fields in the row callback after loading.',{selected:'S017'}),
   '5.2': p('要看一整年的升降，先选哪种图？','Which view would you try first for annual change?','折线图','A line chart','日历格子','A calendar',0,'让图形的结构，贴近要回答的问题。','Match the structure of the view to the question.',{view:'line',day:181}),
   '5.3': p('要查 2 月 29 日，哪种布局更直接？','Which layout makes February 29 easier to locate?','日历布局','A calendar layout','年度螺旋','An annual spiral',0,'同一份数据，可以有不同的阅读入口。','The same data can support different reading tasks.',{view:'calendar',day:59})
 };

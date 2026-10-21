@@ -2,27 +2,52 @@
 
 Grouping, hierarchy, layout and event handling form the full pipeline.
 
-These revised notes accompany the explanation, key-code and demonstration tabs. Student, temperature, field and event examples are constructed teaching data.
-
 ## 2.1 The visualization pipeline
 
-Follow a dataset through raw data, data tables, visual structures and views.
+### Three visualization models
 
-### Define the task
+Several models explain how data becomes a graphic. Card describes the transformation stages, Mackinlay addresses encoding choices, and van Wijk includes interaction and knowledge acquisition.
 
-Comparing counts, finding a record and analyzing relationships are different tasks. Organize data for a defined task; a new layout cannot repair incorrect grouping.
+| Model | Central idea |
+| --- | --- |
+| Card, Mackinlay and Shneiderman (1999) | Raw data → data tables → visual structures → views |
+| Mackinlay (1986) | Consider expressiveness and channel effectiveness for each data type |
+| van Wijk (2005) | Data, visualization, perception and exploration form a feedback process |
 
-### Distinguish three transformations
+### Following the data flow
 
-Data transformation prepares tables and statistics; visual mapping chooses marks and channels; view transformation arranges the screen representation. The stages connect but have distinct responsibilities.
+- **Data transformation:** clean, filter and group raw records into a table suited to analysis.
+- **Visual mapping:** choose marks and channels, such as position for hierarchy and color for categories.
+- **View transformation and rendering:** use layout, coordinates and the drawing region to produce the visible graphic.
+- **Interaction:** selections, filters and parameter changes feed back into the relevant stages.
 
-### Interaction closes the loop
+This lesson follows the stages with one grouped dataset: count records by major and class, build a hierarchy, calculate a tree layout, then add expansion, selection and event handling.
 
-Card’s model describes the pipeline; Mackinlay’s work addresses expressiveness and effectiveness; van Wijk models the cycle of imagery, perception, knowledge and exploration. Interaction can change parameters, filters or mappings.
+### Key code
 
-### Key code: A state-driven pipeline
+#### 1. Pipeline nodes, arrows and selection
 
-This is the syntax-example function executed on the website. The environment supplies svg, d3, n and L; it is not a standalone HTML document.
+```javascript
+// A marker in defs defines a reusable arrowhead.
+svg.append('defs').append('marker').attr('id', 'pipeline-arrow')
+  .attr('viewBox', '0 -5 10 10').attr('refX', 8)
+  .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
+  .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#8298aa');
+// url(#id) references the SVG definition.
+svg.append('line').attr('x1', 40).attr('x2', 160).attr('y1', 60).attr('y2', 60)
+  .attr('stroke', '#8298aa').attr('marker-end', 'url(#pipeline-arrow)');
+const nodes = svg.selectAll('g.node').data(stages, d => d.id).join('g').attr('class', 'node');
+nodes.on('click', (event, picked) => {
+  // picked is clicked; d is the node whose class is being set.
+  nodes.classed('selected', d => d.id === picked.id);
+});
+```
+
+**Key-point explanation**
+
+`append` returns the new selection for further attributes and children. `marker-end` references the arrowhead and `orient="auto"` follows the line direction. `classed("selected", predicate)` evaluates a boolean for each node to update selection state.
+
+### Runnable example: A state-driven pipeline
 
 ```javascript
 function flow({svg,d3,n,L}) {
@@ -39,8 +64,6 @@ function flow({svg,d3,n,L}) {
 }
 ```
 
-- **data(stages)**: Each stage corresponds to a rectangle and label.
-- **classed("chosen", predicate)**: Evaluate whether each element is the selected stage.
 
 [D3 documentation](https://d3js.org/d3-selection/modifying)
 
@@ -52,23 +75,67 @@ Inspect records, groups, hierarchy and tree. Identify the structure introduced a
 
 ## 2.2 Grouping trees: group and rollup
 
-Group by fields, then decide whether to keep records or only statistics.
+### Data transformation: records to groups
 
-### Keys define the groups
+Counting students by major and class is a nested aggregation. The outer level groups by major, the inner level by class, and each group is reduced to a record count.
 
-Grouping by major and by class produces different sets. A key accessor changes the meaning of the summary, not merely its label.
+| Operation | Purpose | Typical form |
+| --- | --- | --- |
+| Clean / filter | Handle blanks and select matching records | filter, CSV row callback |
+| Aggregate | Group by keys and calculate a summary | d3.group, d3.rollup |
+| Join | Relate records using shared keys | Map index and key lookup |
+| Derive | Calculate a field from existing values | Extract a major from a class name |
 
-### Understand nested Maps
+### Parameters and results of d3.rollup
 
-d3.rollup(data, reducer, key1, key2) groups by key1 then key2. Leaves contain reducer results. Use for…of and destructuring to read keys and values at each level.
+`d3.rollup(data, reducer, key1, key2, ...)` groups records by the keys, then passes each innermost record array to the reducer. `v => v.length` returns the count; `v => d3.mean(v, d => d.score)` returns the mean score.
 
-### Reconcile the totals
+- One key produces one Map level; two keys produce nested Maps.
+- Use `for (const [key, value] of map)` to iterate entries.
+- `group` retains group records; `rollup` retains the reduced result.
 
-For a complete, nonoverlapping partition, leaf counts sum to input size. Selecting a group and inspecting members checks the aggregation.
+### Slicing and drilling down
 
-### Key code: Nested grouping and reduction
+To inspect one major, filter before aggregation. Expanding a major to inspect its classes reads the next level of the grouped result. This overview-to-detail organization also appears in OLAP and interactive analysis.
 
-This is the syntax-example function executed on the website. The environment supplies svg, d3, n and L; it is not a standalone HTML document.
+### Key code
+
+#### 1. Nested rollup and Map iteration
+
+```javascript
+const nested = d3.rollup(
+  students,
+  group => group.length,  // The reducer receives an innermost record array.
+  d => d.major,           // First key: major.
+  d => d.class            // Second key: class.
+);
+// Outer values are Maps; inner values are counts.
+for (const [major, classes] of nested) {
+  for (const [className, count] of classes) console.log(major, className, count);
+}
+```
+
+**Key-point explanation**
+
+Grouping keys are rest parameters. Two keys produce two Map levels, which require two levels of access. The reducer determines the leaf type; replacing the count with `d3.mean(...)` yields group means.
+
+#### 2. Extracting a major from a class name
+
+```javascript
+const className = '软件工程12班';
+// ^/$ anchor the string; groups capture major and class number.
+const match = className.match(/^(.+?)(\d+班)$/);
+const major = match ? match[1] : className;
+// match[0] is the full match; [1]/[2] are capture groups.
+console.log(major, match?.[2]); // 软件工程, 12班
+// A derived field can be added in the CSV row callback.
+```
+
+**Key-point explanation**
+
+`.+?` starts with a shorter match and `\d+` matches one or more digits. The ending requires digits followed by 班, keeping a multi-digit class number together. A failed match is null; the conditional provides a fallback and optional chaining stops access on null.
+
+### Runnable example: Nested grouping and reduction
 
 ```javascript
 function rollup({svg,d3,n}) {
@@ -83,9 +150,6 @@ function rollup({svg,d3,n}) {
 }
 ```
 
-- **group => group.length**: The reducer receives a group array and returns its count.
-- **d => d.major, d => d.class**: Keys create nested Maps in argument order.
-- **([major, classes])**: Destructure an entry; classes remains a Map.
 
 [D3 documentation](https://d3js.org/d3-array/group)
 
@@ -97,19 +161,28 @@ Switch major and class, inspect a group’s IDs, and verify that counts still su
 
 ## 2.3 Visual mapping and tree layout
 
-Hierarchy describes parent–child relationships; a layout computes positions.
+### Visual mapping: marks and channels
 
-### Structure is not position
+A visual structure combines marks and channels. **Points, lines and areas** are marks. Position, color, shape, tilt and size are channels. The same dataset can use different marks or different channels for an attribute.
 
-d3.hierarchy augments nested data with parent, children and depth. It does not yet assign layout x/y coordinates; d3.tree(root) performs the layout.
+| Channel type | Attribute | Examples |
+| --- | --- | --- |
+| Magnitude | Ordered or quantitative | Position, length, area, lightness |
+| Identity | Categories or identity | Spatial region, hue, shape |
 
-### Rendering chooses orientation
+The original five figures cover channel rankings, marks, common channels, magnitude channels and identity channels. Position on a common scale is often a good choice for precise quantitative comparisons; hue, shape and spatial region can distinguish categories.
 
-In tree layout, x locates nodes across the breadth and y represents depth. A horizontal tree renders translate(d.y, d.x) and uses the same coordinate swap for links.
+### Tree layout: placing a hierarchy
 
-### Marks and channels encode together
+The previous section produced a major → class hierarchy. A tree uses nodes for entities and links for parent-child relationships, mapping the hierarchy to position. D3’s `tree` uses a tidy-tree layout that separates nodes on each level and centers parents over their subtrees.
 
-Circles mark nodes, lines mark relationships, and position expresses hierarchy and proximity. Changing orientation should preserve parent–child relationships. The original channel figures distinguish magnitude from identity.
+- `d3.hierarchy(data)` establishes parent, children, depth and related structure.
+- `d3.tree().size([height, width])(root)` assigns x and y coordinates.
+- For a horizontal tree, draw the depth coordinate y horizontally and x vertically. Use this convention for both nodes and links.
+
+### Other hierarchical layouts
+
+`cluster` aligns leaves, `treemap` uses rectangle area, `pack` packs circles, and `partition` supplies coordinates for icicles and sunbursts. Different layouts emphasize different aspects of the same hierarchy.
 
 ![Original course: point, line and area marks.](../figures/02-marks-points-lines-areas.png)
 
@@ -121,9 +194,47 @@ Circles mark nodes, lines mark relationships, and position expresses hierarchy a
 
 ![Original course: visual-channel rankings for different data types.](../figures/01-mackinlay-ranking.png)
 
-### Key code: hierarchy → tree → links
+### Key code
 
-This is the syntax-example function executed on the website. The environment supplies svg, d3, n and L; it is not a standalone HTML document.
+#### 1. hierarchy → tree → links / nodes
+
+```javascript
+// hierarchy builds relationships, not layout coordinates.
+const root = d3.hierarchy(rootData);
+const layout = d3.tree().size([360, 720]);
+layout(root); // Run the layout to assign x and y.
+const g = svg.append('g').attr('transform', 'translate(40,20)');
+g.selectAll('path.link').data(root.links()).join('path').attr('class', 'link')
+  .attr('d', d3.linkHorizontal().x(d => d.y).y(d => d.x))
+  .attr('fill', 'none').attr('stroke','#9bb1bd');
+const nodes = g.selectAll('g.node').data(root.descendants()).join('g').attr('class', 'node')
+  .attr('transform', d => `translate(${d.y},${d.x})`);
+nodes.append('circle').attr('r', 5);
+nodes.append('text').attr('x', d => d.children ? -8 : 8)
+  .attr('text-anchor', d => d.children ? 'end' : 'start')
+  .text(d => d.data.name); // Original fields live in node.data.
+```
+
+**Key-point explanation**
+
+`root.descendants()` returns nodes; `root.links()` returns source/target links. Tree y is depth and x spreads nodes across a level. A horizontal tree uses y horizontally. Node transforms and link accessors must use the same swap.
+
+#### 2. size and separation
+
+```javascript
+const layout = d3.tree().size([360, 720])
+  // a/b are nodes to separate, not a parent-child parameter pair.
+  .separation((a, b) => a.parent === b.parent ? 1 : 2);
+layout(root);
+// Use nodeSize when fixed node spacing is desired.
+const fixed = d3.tree().nodeSize([24, 160]);
+```
+
+**Key-point explanation**
+
+`size` sets the overall coordinate extent. `separation` controls relative spacing between nodes on a level; 1 and 2 are relative weights, not pixels. `nodeSize` instead uses fixed coordinate spacing.
+
+### Runnable example: hierarchy → tree → links
 
 ```javascript
 function tree({svg,d3,n}) {
@@ -141,9 +252,6 @@ function tree({svg,d3,n}) {
 }
 ```
 
-- **d3.hierarchy(data)**: Compute parent/child relationships and depth.
-- **d3.tree().size(...)**: Calling the layout assigns node coordinates.
-- **x(d => d.y).y(d => d.x)**: Swap coordinates consistently for horizontal rendering.
 
 [D3 documentation](https://d3js.org/d3-hierarchy/tree)
 
@@ -155,23 +263,107 @@ Switch horizontal and vertical orientation and select the same node. Separate po
 
 ## 2.4 Tree lists and event handling
 
-Turn a hierarchy into an expandable list, with explicit click behavior.
+### From a hierarchy to an interactive list
 
-### A list is another view
+A hierarchy can be rendered as nested HTML lists as well as a node-link diagram. Each node becomes an `li`, with children in an inner `ul`. D3’s `classed` controls expanded, collapsed and selected states.
 
-A tree emphasizes branching; an indented list supports sequential reading. The same relationships can use different marks, space and interactions.
+### Three phases of DOM events
 
-### Event and datum are different
+| Phase | Direction | List example |
+| --- | --- | --- |
+| Capturing | Outer elements toward the target | Container → li → button |
+| Target | The element that was clicked | Expand button |
+| Bubbling | Target toward outer elements | Button → li → container |
 
-D3 v7 listeners receive (event, d). event describes the action and coordinates; d is the bound datum. Access the element with a regular function’s this or event.currentTarget.
+Listeners normally handle the bubbling phase. A click on an expand button also reaches its ancestor node. If the node has a selection listener, both actions may run. `event.stopPropagation()` stops further propagation to ancestors.
 
-### Control state and bubbling
+### Event delegation and classed
 
-classed(name, boolean) toggles a class. stopPropagation stops bubbling, but does not cancel default behavior. Delegation listens on a parent and locates the clicked target with closest.
+Event delegation places a listener on the list container and uses `event.target.closest(...)` to find the clicked item. `event.target` is where the event originated; `event.currentTarget` is the element whose listener is running.
 
-### Key code: Events and state
+`selection.classed("selected", true)` adds a class; `false` removes it; a function computes the state for each datum. This separates data state from CSS styling.
 
-This is the syntax-example function executed on the website. The environment supplies svg, d3, n and L; it is not a standalone HTML document.
+### Transitions
+
+`transition().duration(ms)` interpolates position, color or opacity from old values to new values. A zero duration changes immediately; a longer duration exposes the movement. Call `interrupt()` to stop an existing transition before another action.
+
+### Key code
+
+#### 1. Expansion, selection and event propagation
+
+```javascript
+const item = d3.select('li');
+const toggle = item.select('button.toggle');
+toggle.on('click.toggle', function(event) {
+  event.stopPropagation(); // Stop the event before it reaches the ancestor li listener.
+  const open = this.getAttribute('aria-expanded') !== 'true';
+  this.setAttribute('aria-expanded', String(open));
+  item.classed('expanded', open);
+});
+// .select is a namespace for replacing/removing this listener.
+item.on('click.select', () => item.classed('selected', true));
+```
+
+**Key-point explanation**
+
+Both names listen for click; the suffix is a D3 event namespace. A button click runs its listener and then bubbles to ancestors. `stopPropagation` stops that propagation; `preventDefault` instead prevents a default browser action.
+
+#### 2. Recursively building nested lists
+
+```javascript
+function buildList(parent, nodes) {
+  const items = parent.selectAll('li').data(nodes, d => d.id).join('li');
+  items.each(function(d) {
+    const item = d3.select(this); // Wrap this DOM node as a D3 selection.
+    item.selectAll('span.label').data([d]).join('span').attr('class', 'label').text(d => d.name);
+    const children = d.children ?? [];
+    const nested = item.selectAll('ul').data(children.length ? [children] : []).join('ul');
+    if (children.length) buildList(nested, children); // Repeat for the child level.
+  });
+}
+buildList(d3.select('#tree'), [rootData]);
+```
+
+**Key-point explanation**
+
+`each` runs a function for every selected element, allowing a subtree to be built inside each node. `[children]` binds the entire child array to one ul, whose items are then bound to li elements. Recursion stops at leaves.
+
+#### 3. transition and duration
+
+```javascript
+const nodes = svg.selectAll('circle.node');
+// Ordinary attr sets immediately; attr after transition interpolates.
+nodes.interrupt().transition().duration(500)
+  .attr('cx', d => d.x).attr('cy', d => d.y).attr('opacity', 1);
+// Fade in by setting a start value followed by a target value.
+svg.append('circle').attr('r', 8).attr('opacity', 0)
+  .transition().duration(500).attr('opacity', 1);
+```
+
+**Key-point explanation**
+
+Duration is in milliseconds. A transition interpolates from current attributes to targets. Opacity zero followed by a target of one creates a fade. On rapid actions, `interrupt` stops the old transition before a new one starts from the current displayed state.
+
+#### 4. Delegating an event to the container
+
+```javascript
+d3.select('#tree').on('click', function(event) {
+  const label = event.target.closest('.label'); // Search upward from the clicked element.
+  if (!label || !this.contains(label)) return;
+  const item = label.closest('li');
+  const datum = d3.select(item).datum();        // Read the datum bound to this li.
+  d3.select(this).selectAll('li').classed('selected', function() {
+    return this === item;
+  });
+  console.log(datum);
+});
+```
+
+**Key-point explanation**
+
+A single container listener also receives bubbled clicks from newly added items. `target` is the original clicked element; `this` in the regular listener is the container. Calling `datum()` with no argument reads the element’s bound data.
+
+### Runnable example: Events and state
 
 ```javascript
 function events({svg,d3,n,L}) {
@@ -193,10 +385,6 @@ function events({svg,d3,n,L}) {
 }
 ```
 
-- **(event, d)**: event is the action; d is the bound datum.
-- **function / this**: A regular function receives the element as this; use currentTarget in an arrow.
-- **classed(name, boolean)**: The boolean determines whether the class is present.
-- **transition().duration(350)**: Interpolate attributes over 350 ms; interrupt prevents old transitions accumulating on rapid clicks.
 
 [D3 documentation](https://d3js.org/d3-selection/events)
 

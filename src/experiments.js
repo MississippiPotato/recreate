@@ -184,7 +184,7 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
       status(parent,`${L('保留','Retained')} <strong>${rows.length} / 80</strong> · ${selected.id} = ${selected.score}${rows.some(r=>r.id===selected.id)?'':L(' · 不满足过滤条件，原始记录仍保留',' · Excluded by the filter; retained in source')}`);
       const visible=rows.slice(0,8);if(rows.includes(selected)&&!visible.includes(selected))visible.push(selected);
       rowsTable(parent,visible,p,readonly);
-      status(parent,L('80 条教学合成记录 · seed 42 · 表格为前 8 行及选中行','80 synthetic records · seed 42 · table shows the first 8 and the selected row'));
+      status(parent,L('80 条记录 · 表格显示前 8 行及选中行','80 records · table shows the first 8 and the selected row'));
     } else if(k==='semantics') {
       const g=svg(parent,L('同一组数字，不同的语义','Same numbers, different semantics'),260);
       [5,10,15,20].forEach((v,i)=>{
@@ -247,7 +247,7 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
       const rows=p.layout==='wide'?input:calc.toLong(input,['income','cost']);
       const keys=Object.keys(rows[0]);
       const div=document.createElement('div');div.className='data-table reshape';
-      div.innerHTML=`<table><caption>${L('教学构造 · 单位：万元','Constructed example · units: 10,000')}</caption><thead><tr>${keys.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(key=>{const cell=key==='value'?`${r.id}:${r.field}`:`${r.id}:${key}`;return `<td class="${cell===p.cellKey?'selected-row':''}">${typeof r[key]==='number'?`<button data-cell="${cell}">${r[key]}</button>`:r[key]}</td>`;}).join('')}</tr>`).join('')}</tbody></table>`;
+      div.innerHTML=`<table><caption>${L('单位：万元','Units: 10,000')}</caption><thead><tr>${keys.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(key=>{const cell=key==='value'?`${r.id}:${r.field}`:`${r.id}:${key}`;return `<td class="${cell===p.cellKey?'selected-row':''}">${typeof r[key]==='number'?`<button data-cell="${cell}">${r[key]}</button>`:r[key]}</td>`;}).join('')}</tr>`).join('')}</tbody></table>`;
       if(!readonly)div.querySelectorAll('[data-cell]').forEach(el=>el.onclick=()=>update('cellKey',el.dataset.cell));parent.append(div);
       status(parent,`${L('当前形式','Form')}: ${p.layout} · ${rows.length} ${L('行','rows')} · ${L('追踪','Following')}: <strong>${p.cellKey}</strong>`);
     } else if(k==='scale') {
@@ -338,7 +338,7 @@ export function createExperiment(host,section,lang,onChange=()=>{}) {
     }
     status(parent,`<strong>${selected.id}</strong> · ${selected.value===null?L('缺失，不能解释为 0°C','Missing, not 0°C'):`${selected.value}°C`} · ${L('全年统一颜色域 −5 至 35°C','Shared annual color domain: −5 to 35°C')}`);
     const legend=document.createElement('div');legend.className='color-legend';legend.innerHTML=`<span>−5°C</span><i style="background:linear-gradient(90deg,${[0,.25,.5,.75,1].map(v=>d3.interpolateYlGnBu(v)).join(',')})"></i><span>35°C</span><span>□ ${L('缺失','Missing')}</span>`;parent.append(legend);
-    status(parent,L('366 个日期 · 364 个数值 · 教学合成气温，不代表真实城市','366 dates · 364 values · synthetic temperature, not a real city'));
+    status(parent,L('366 个日期 · 364 个数值 · 2 天缺失','366 dates · 364 readings · 2 missing days'));
   }
   render();
   return {

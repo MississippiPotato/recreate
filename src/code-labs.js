@@ -17,6 +17,20 @@ async function csv({svg,d3,n}) {
     .attr('x',10).attr('y',(d,i)=>33+i*24).text(d=>d.id);
   return {rows:rows.length,scoreType:typeof rows[0].score,first:rows[0]};
 }
+function dikw({svg,d3,n,L}) {
+  const labels=L(['数据','信息','知识','智慧'],['Data','Information','Knowledge','Wisdom']);
+  // 每个梯形绑定一层；索引 0 在底部，3 在顶部。 ←→ Bind one layer per trapezoid; index 0 is at the bottom.
+  const layers=labels.map((label,i)=>({label,index:i,top:155-i*48,width:380-i*85}));
+  const groups=svg.selectAll('g').data(layers).join('g');
+  groups.append('path').attr('d',d=>{
+    const cx=300,top=d.top,w=d.width;
+    // 按顺序画四个顶点，最后闭合。 ←→ Visit four vertices in order, then close the shape.
+    return `M${cx-(w-65)/2},${top}L${cx+(w-65)/2},${top}L${cx+w/2},${top+42}L${cx-w/2},${top+42}Z`;
+  }).attr('fill',d=>d.index===n-1?'#e16a45':'#2878ad');
+  groups.append('text').attr('x',300).attr('y',d=>d.top+28).attr('text-anchor','middle')
+    .attr('fill','white').text(d=>d.label);
+  return {selected:labels[n-1],level:n};
+}
 function events({svg,d3,n,L}) {
   const values=d3.range(n);
   const marks=svg.selectAll('circle').data(values).join('circle')
@@ -270,6 +284,7 @@ function story({svg,d3,n}) {
 
 const config=(title,en,run,control,controlEn,min,max,value,notes,docs,persistent=false)=>({title:B(title,en),run,control:B(control,controlEn),min,max,value,notes:notes.map(([term,zh,en])=>({term,text:B(zh,en)})),docs,persistent});
 export const codeLabs={
+  dikw:config('DIKW 金字塔与路径','DIKW pyramid paths',dikw,'高亮层级','Highlighted level',1,4,1,[['path.attr("d",...)','M、L 与 Z 分别移动、画线和闭合。','M moves, L draws a line, and Z closes.'],['data(layers)','每层数据对应一组图形和文字。','Each layer binds to one group of marks and text.']],'https://d3js.org/d3-selection/events'),
   csv:config('读取 CSV 与转换字段','Load CSV and convert fields',csv,'显示条数','Visible records',2,7,5,[['await d3.csv(url, row)','await 等待异步读取；row 的返回值成为一条记录。','await waits for loading; the row callback returns each converted record.'],['Number(row.score)','显式数值转换；空值先判断。','Convert explicitly after checking for blanks.'],['d => d.id','箭头函数返回稳定编号，用于匹配。','The arrow function returns a stable key.']],'https://d3js.org/d3-fetch'),
   events:config('事件与状态','Events and state',events,'圆点数量','Circle count',2,10,6,[['(event, d)','event 是事件，d 是绑定的数据，不要颠倒。','event is the action; d is the bound datum.'],['function / this','普通函数的 this 指向元素；箭头函数改用 currentTarget。','A regular function receives the element as this; use currentTarget in an arrow.'],['classed(name, boolean)','布尔值决定添加还是移除类。','The boolean determines whether the class is present.'],['transition().duration(350)','在 350 毫秒内插值属性；interrupt 防止快速点击时堆积旧过渡。','Interpolate attributes over 350 ms; interrupt prevents old transitions accumulating on rapid clicks.']],'https://d3js.org/d3-selection/events'),
   scales:config('比例尺与坐标轴','Scales and axes',scales,'宽度参数','Width parameter',3,12,10,[['domain([0,100])','输入数据的范围。','The range of input values.'],['range([40,...])','输出像素的范围，与 domain 按顺序对应。','The output pixel range corresponds to domain order.'],['selection.call(axis)','把当前选择集交给坐标轴生成器。','Pass the current selection to the axis generator.']],'https://d3js.org/d3-scale/linear'),
@@ -292,7 +307,7 @@ export const codeLabs={
   aspect:config('用 range 改变画布倾角','Changing slope through range',aspect,'纵向像素参数','Vertical pixel parameter',3,10,7,[['固定 domain','数值不变，先固定输入范围。','Retain values and fix the input domain.'],['range([175,...])','减小 y 像素值让数值向上绘制。','Smaller y pixels place larger values higher.']],'https://d3js.org/d3-scale/linear'),
   contours:config('d3.contours 的输入约定','The d3.contours input contract',contours,'阈值 ÷ 10','Threshold / 10',1,9,5,[['size([columns,rows])','这里是采样网格大小，不是像素尺寸。','This is the sampling grid, not pixel dimensions.'],['thresholds([value])','显式指定要提取的等值。','Specify the contour threshold explicitly.'],['geoIdentity().scale(15)','把网格坐标映射到绘图像素。','Map grid coordinates to pixels.']],'https://d3js.org/d3-contour/contour'),
   time:config('UTC 日期间隔','UTC date intervals',time,'连续日期数量','Consecutive date count',3,8,6,[['Date.UTC(...)','月份从 0 起；1 表示二月。','Months start at zero; 1 is February.'],['utcDays(start,stop)','生成日历日期，stop 不包含在内。','Generate calendar dates, excluding stop.'],['scaleUtc()','时间轴按实际经过的时间映射。','Map actual elapsed time.']],'https://d3js.org/d3-time'),
-  line:config('defined 与缺失值','defined and missing values',line,'1 断开 / 2 补零','1 gap / 2 zero',1,2,1,[['defined(d => d.value !== null)','只连接连续有效的采样段。','Connect contiguous valid sample runs.'],['value ?? 0','仅为错误对照展示补零，不代表真实观测。','Zero substitution is a deliberately misleading comparison, not an observation.']],'https://d3js.org/d3-shape/line'),
+  line:config('defined 与缺失值','defined and missing values',line,'1 断开 / 2 补零','1 gap / 2 zero',1,2,1,[['defined(d => d.value !== null)','只连接连续有效的采样段。','Connect contiguous valid sample runs.'],['value ?? 0','null 转成零后会改变缺失日期处的曲线形状。','Replacing null with zero changes the line at missing dates.']],'https://d3js.org/d3-shape/line'),
   calendar:config('日期到日历坐标','Dates to calendar coordinates',calendar,'周数','Week count',3,12,7,[['utcMonday.count(first,d)','从起始周数到该日期的周数。','Count week boundaries from the initial week.'],['(getUTCDay()+6)%7','把星期一设为第 0 行。','Make Monday row zero.']],'https://d3js.org/d3-time'),
   spiral:config('极坐标到笛卡尔坐标','Polar to Cartesian coordinates',spiral,'每圈天数','Days per turn',7,21,14,[['theta = day/n * 2π','n 是显示周期，不改变输入序列。','n is the display period, not a source-data change.'],['cos / sin','角度和半径共同决定位置。','Angle and radius determine position.']],'https://d3js.org/d3-shape/line'),
   story:config('多条路径的数据连接','Joining multiple paths',story,'事件序号','Event index',0,5,2,[['data(series)','每个数组对应一个角色路径。','Each nested array represents a character path.'],['attr("d", path)','line 生成器逐条处理事件序列。','The line generator processes each event sequence.']],'https://d3js.org/d3-shape/line')

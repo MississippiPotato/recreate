@@ -43,10 +43,10 @@ export function mountInteractive(host,section,lang,snapshot){
       if(rebuild)labels.forEach((name,i)=>{const b=button(name,()=>{state.layer=i;render();});b.setAttribute('aria-pressed',state.layer===i);controls.append(b);});
       const g=chart(pane,L('DIKW 四层与案例','DIKW layers and examples'),360);
       const details=[
-        L(`S001 的成绩是 ${students[0].score}。还需要字段、单位和来源。`,`S001 has score ${students[0].score}. We still need field, unit and source.`),
-        L(`这份样本有 ${students.length} 条记录，平均分 ${d3.mean(students,d=>d.score).toFixed(1)}。只能描述此合成样本。`,`This sample has ${students.length} records and a mean of ${d3.mean(students,d=>d.score).toFixed(1)}. This describes the synthetic sample only.`),
-        L('发现组间差异后，仍需额外证据检验原因；不能把相关当作因果。','Group differences still need evidence explaining why; correlation is not causation.'),
-        L('如果要决定教学安排，还要结合目标、成本、约束和真实调查。','Decisions also need goals, costs, constraints and real observations.')
+        L(`S001 的成绩是 ${students[0].score}，所属专业为${major(students[0].major,lang)}。`,`S001 has score ${students[0].score} and major ${students[0].major}.`),
+        L(`按专业组织 ${students.length} 条记录；全体平均分为 ${d3.mean(students,d=>d.score).toFixed(1)}。`,`Organize ${students.length} records by major; the overall mean score is ${d3.mean(students,d=>d.score).toFixed(1)}.`),
+        L('比较各专业的成绩分布和学习时长，寻找不同组别中的共同模式。','Compare score distributions and study hours across majors to identify shared patterns.'),
+        L('结合课程目标与班级情况，确定分组方式和教学安排。','Combine course goals and class composition to plan groups and teaching activities.')
       ];
       for(let i=0;i<4;i++){
         const level=3-i,w=130+i*110,top=50+i*72;

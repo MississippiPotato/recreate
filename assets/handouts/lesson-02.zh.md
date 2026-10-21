@@ -2,27 +2,52 @@
 
 分组、层次、布局和事件处理，共同组成完整流程。
 
-本讲义基于原课程与课程材料重新组织，配套网站保留“讲解 / 关键代码 / 演示”。示例中的学生、气温、场与事件为教学构造数据。
-
 ## 2.1 数据可视化流程
 
-沿着“原始数据 → 数据表 → 视觉结构 → 视图”追踪一份数据。
+### 三个可视化流程模型
 
-### 先明确任务
+从数据到图形，可以用几个经典模型来理解。Card 模型说明数据经过哪些步骤，Mackinlay 讨论视觉表达的选择，van Wijk 模型把用户交互和知识获取放进了这个过程。
 
-比较人数、查找一条记录、分析关系是不同任务。先明确任务再组织数据；上游分组错了，换一种图形布局并不能修正结果。
+| 模型 | 核心内容 |
+| --- | --- |
+| Card、Mackinlay 与 Shneiderman（1999） | 原始数据 → 数据表 → 视觉结构 → 视图 |
+| Mackinlay（1986） | 根据数据类型考虑表达能力和视觉通道的有效性 |
+| van Wijk（2005） | 数据、可视化、感知与探索组成反馈过程 |
 
-### 区分三类变换
+### 沿着数据流看每一步
 
-数据变换准备表和统计量；视觉映射决定用什么标记与通道；视图变换安排屏幕上的位置和显示条件。它们相互衔接，但不是同一个步骤。
+- **数据变换：**从原始记录中清洗、筛选、分组，得到适合分析的数据表。
+- **视觉映射：**选择图元和通道，例如用位置表示层次，用颜色区分类别。
+- **视图变换与渲染：**根据布局、坐标和绘图区域生成最终图形。
+- **交互反馈：**用户选择、过滤或调整参数后，重新计算相应步骤。
 
-### 交互形成反馈
+本章使用同一份分组数据串联这些步骤：先统计专业和班级人数，再建立层次结构，计算树布局，最后加入展开、选中和事件处理。
 
-Card 模型帮助拆解流水线；Mackinlay 的工作帮助讨论表达力与有效性；van Wijk 的模型强调图像、感知、知识与探索的循环。交互可以修改参数、筛选条件或映射。
+### 关键代码
 
-### 关键代码: 状态驱动的流程图
+#### 1. 流程节点、箭头与选中状态
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+```javascript
+// defs 中的 marker 是可复用的箭头定义。
+svg.append('defs').append('marker').attr('id', 'pipeline-arrow')
+  .attr('viewBox', '0 -5 10 10').attr('refX', 8)
+  .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
+  .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#8298aa');
+// url(#id) 引用当前 SVG 中的定义。
+svg.append('line').attr('x1', 40).attr('x2', 160).attr('y1', 60).attr('y2', 60)
+  .attr('stroke', '#8298aa').attr('marker-end', 'url(#pipeline-arrow)');
+const nodes = svg.selectAll('g.node').data(stages, d => d.id).join('g').attr('class', 'node');
+nodes.on('click', (event, picked) => {
+  // picked 是点击项；d 是当前正在设置样式的项。
+  nodes.classed('selected', d => d.id === picked.id);
+});
+```
+
+**关键点解释**
+
+`append` 返回新元素的选择集，因此可以继续设置属性或添加子元素。`marker-end` 引用箭头，`orient="auto"` 让它跟随线段方向。`classed("selected", predicate)` 对每个节点求布尔值，一次更新全部选中状态。
+
+### 运行示例: 状态驱动的流程图
 
 ```javascript
 function flow({svg,d3,n,L}) {
@@ -39,8 +64,6 @@ function flow({svg,d3,n,L}) {
 }
 ```
 
-- **data(stages)**: 每个阶段对应一个矩形和标签。
-- **classed("chosen", predicate)**: 对每个元素计算是否为当前阶段。
 
 [D3 官方文档](https://d3js.org/d3-selection/modifying)
 
@@ -52,23 +75,67 @@ function flow({svg,d3,n,L}) {
 
 ## 2.2 数据分类树：group 与 rollup
 
-先按字段分组，再明确每组要保留记录还是只保留统计量。
+### 数据变换：从记录到分组结果
 
-### 分组键定义了集合
+按“专业 / 班级”统计新生人数，是一次多维分组聚合。外层按专业分组，内层按班级分组，每组用记录条数表示人数。
 
-按专业分组与按班级分组会得到不同集合。改变 key 提取函数，会改变汇总的含义，不只是改变显示标签。
+| 操作 | 作用 | 常用写法 |
+| --- | --- | --- |
+| 清洗 / 过滤 | 去除空项、筛选满足条件的记录 | filter、CSV 行回调 |
+| 聚合 / 汇总 | 按 key 分组并计算结果 | d3.group、d3.rollup |
+| 连接 / 关联 | 按共同字段关联两份记录 | Map 索引与字段查找 |
+| 派生字段 | 从已有字段计算新字段 | 从班级名称提取专业 |
 
-### 理解嵌套 Map
+### d3.rollup 的参数与返回值
 
-d3.rollup(data, reducer, key1, key2) 先按 key1、再按 key2 分组。叶子是 reducer 的返回值。用 for…of 与解构可读取每层的键和值。
+`d3.rollup(data, reducer, key1, key2, ...)` 先按 key 分组，再把每个最内层的记录数组交给 reducer。`v => v.length` 得到人数，`v => d3.mean(v, d => d.score)` 得到平均分。
 
-### 总数应当对得上
+- 一个 key 返回单层 Map；两个 key 返回嵌套 Map。
+- 使用 `for (const [key, value] of map)` 遍历键值对。
+- `group` 保留组内记录，`rollup` 保留聚合结果。
 
-如果分组覆盖同一批记录且没有重复计数，各叶子的人数之和应等于输入记录数。点击一个组，回查其成员，是检查聚合是否正确的直接方法。
+### 切片与下钻
 
-### 关键代码: 多层分组与归约
+只看某专业，可以先过滤再聚合；展开某专业查看各班人数，则是在聚合结果中向下读取一层。这种“总体 → 局部”的组织方式也常用于 OLAP 和交互分析。
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+### 关键代码
+
+#### 1. 双层 rollup 与 Map 遍历
+
+```javascript
+const nested = d3.rollup(
+  students,
+  group => group.length,  // reducer 收到最内层的记录数组。
+  d => d.major,           // 第一个 key：专业。
+  d => d.class            // 第二个 key：班级。
+);
+// 外层值是 Map，内层值才是人数。
+for (const [major, classes] of nested) {
+  for (const [className, count] of classes) console.log(major, className, count);
+}
+```
+
+**关键点解释**
+
+`rollup` 的分组键是可变数量的参数。传两个键就产生两层 Map，读取时也要对应两层。reducer 决定叶子值的类型；把 `group.length` 换成 `d3.mean(...)`，叶子就从人数变成均值。
+
+#### 2. 从班级名称提取专业
+
+```javascript
+const className = '软件工程12班';
+// ^ 和 $ 限定完整字符串；两组括号分别捕获专业和班号。
+const match = className.match(/^(.+?)(\d+班)$/);
+const major = match ? match[1] : className;
+// match[0] 是完整匹配，match[1] 与 match[2] 是捕获组。
+console.log(major, match?.[2]); // 软件工程, 12班
+// 派生字段可以直接放在 CSV 的行回调中。
+```
+
+**关键点解释**
+
+`.+?` 从较短的匹配开始尝试，`\d+` 匹配一个或多个数字。整个表达式要求结尾是“数字 + 班”，所以多位班号可以一起捕获。`match` 未匹配时为 null，三元表达式提供回退值；`?.` 在 null 时停止属性读取。
+
+### 运行示例: 多层分组与归约
 
 ```javascript
 function rollup({svg,d3,n}) {
@@ -83,9 +150,6 @@ function rollup({svg,d3,n}) {
 }
 ```
 
-- **group => group.length**: reducer 接收组内数组，返回人数。
-- **d => d.major, d => d.class**: 多个 key 按传入顺序生成嵌套 Map。
-- **([major, classes])**: 解构键值对；classes 仍是一个 Map。
 
 [D3 官方文档](https://d3js.org/d3-array/group)
 
@@ -97,19 +161,28 @@ function rollup({svg,d3,n}) {
 
 ## 2.3 视觉映射与树布局
 
-层次关系描述“谁是谁的子节点”，布局算法再为节点计算坐标。
+### 视觉映射：图元与通道
 
-### 数据结构不等于坐标
+视觉结构由图元和视觉通道共同组成。**点、线、面**是图元；位置、颜色、形状、倾斜和大小是通道。同样一份数据，可以选择不同图元，也可以用不同通道表达同一个属性。
 
-d3.hierarchy 为嵌套数据补充 parent、children、depth 等关系。此时还没有图上的 x/y 布局坐标；d3.tree(root) 才进行布局。
+| 通道类型 | 表达的属性 | 常见通道 |
+| --- | --- | --- |
+| 幅度通道 Magnitude | 有序或定量属性 | 位置、长度、面积、明度 |
+| 标识通道 Identity | 类别或身份 | 空间分区、色相、形状 |
 
-### 坐标方向由渲染决定
+原课程的五张图分别展示通道排序、图元、常用通道、幅度通道和标识通道。对数量做精确比较时，通常优先考虑共用尺度上的位置；区分类别时，可以考虑色相、形状或空间分区。
 
-tree 的 x 表示横向排布位置，y 表示深度。画横向树时把节点映射为 translate(d.y, d.x)，并对连线使用相同的交换规则。
+### 树布局：把层级关系放到屏幕上
 
-### 图元和通道共同编码
+上一节得到“专业 → 班级”的层级关系。树布局用节点表示对象，用连线表示父子关系，再把层级映射到位置。D3 的 `tree` 使用 tidy tree 布局，使同一层的节点分开，并把父节点放在子树之间。
 
-圆点是节点标记，线是关系标记，位置表达层次与邻近关系。树布局改变方向时，父子关系不应改变。原课程的通道图可帮助区分“表达多少”和“区分谁”。
+- `d3.hierarchy(data)` 建立 parent、children、depth 等结构。
+- `d3.tree().size([height, width])(root)` 为节点计算 x、y。
+- 横向树把深度坐标 y 画在水平方向，把 x 画在垂直方向。节点和连线使用同一约定。
+
+### 其他层次布局
+
+`cluster` 把叶节点对齐；`treemap` 用矩形面积表达数量；`pack` 用圆打包；`partition` 可以生成 icicle 或 sunburst 的布局坐标。层级数据相同，布局表达的重点可以不同。
 
 ![原课程：点、线、面三类标记。](../figures/02-marks-points-lines-areas.png)
 
@@ -121,9 +194,47 @@ tree 的 x 表示横向排布位置，y 表示深度。画横向树时把节点�
 
 ![原课程：不同数据类型对应的视觉通道排序。](../figures/01-mackinlay-ranking.png)
 
-### 关键代码: hierarchy → tree → links
+### 关键代码
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+#### 1. hierarchy → tree → links / nodes
+
+```javascript
+// hierarchy 建关系；此时还没有布局坐标。
+const root = d3.hierarchy(rootData);
+const layout = d3.tree().size([360, 720]);
+layout(root); // 执行布局，为每个节点写入 x、y。
+const g = svg.append('g').attr('transform', 'translate(40,20)');
+g.selectAll('path.link').data(root.links()).join('path').attr('class', 'link')
+  .attr('d', d3.linkHorizontal().x(d => d.y).y(d => d.x))
+  .attr('fill', 'none').attr('stroke','#9bb1bd');
+const nodes = g.selectAll('g.node').data(root.descendants()).join('g').attr('class', 'node')
+  .attr('transform', d => `translate(${d.y},${d.x})`);
+nodes.append('circle').attr('r', 5);
+nodes.append('text').attr('x', d => d.children ? -8 : 8)
+  .attr('text-anchor', d => d.children ? 'end' : 'start')
+  .text(d => d.data.name); // 原始字段保存在 node.data。
+```
+
+**关键点解释**
+
+`root.descendants()` 返回节点数组，`root.links()` 返回 source/target 连线数组。tree 的 y 表示深度方向，x 表示同层展开方向；横向树把 y 用作屏幕横坐标。节点的 `transform` 与连线访问器必须采用相同坐标交换。
+
+#### 2. size 与 separation
+
+```javascript
+const layout = d3.tree().size([360, 720])
+  // a、b 是需要分开的节点，不是父子参数。
+  .separation((a, b) => a.parent === b.parent ? 1 : 2);
+layout(root);
+// 固定节点间距时，可改用 nodeSize。
+const fixed = d3.tree().nodeSize([24, 160]);
+```
+
+**关键点解释**
+
+`size([360,720])` 指定整个布局的坐标范围；`separation` 控制同层节点之间的相对间隔。1 与 2 表示兄弟与非兄弟的相对分离程度，不是像素。`nodeSize` 则按固定间距安排坐标，与整体 size 是两种布局设置。
+
+### 运行示例: hierarchy → tree → links
 
 ```javascript
 function tree({svg,d3,n}) {
@@ -141,9 +252,6 @@ function tree({svg,d3,n}) {
 }
 ```
 
-- **d3.hierarchy(data)**: 计算父子关系、depth 等结构属性。
-- **d3.tree().size(...)**: 调用生成器后才为节点提供布局坐标。
-- **x(d => d.y).y(d => d.x)**: 横向绘制时，节点与连线一起交换坐标。
 
 [D3 官方文档](https://d3js.org/d3-hierarchy/tree)
 
@@ -155,23 +263,107 @@ function tree({svg,d3,n}) {
 
 ## 2.4 树形列表与事件处理
 
-将层次结构变成可展开的列表，并明确一次点击应该影响哪些节点。
+### 从层次数据到可交互列表
 
-### 列表是另一种视图
+层次数据除了画成节点连线，也可以渲染为嵌套的 HTML 列表。每个节点对应一个 `li`，子节点放进它内部的 `ul`。展开、折叠和选中状态可以用 D3 的 `classed` 控制。
 
-树图强调分支结构，缩进列表便于逐项阅读。数据关系可以相同，标记、空间占用和交互方式可以不同。
+### DOM 事件的三个阶段
 
-### 事件对象和数据对象不同
+| 阶段 | 传播方向 | 列表中的例子 |
+| --- | --- | --- |
+| 捕获 Capturing | 从外层走向目标 | 列表容器 → li → 按钮 |
+| 目标 Target | 到达实际点击的元素 | 展开按钮 |
+| 冒泡 Bubbling | 从目标返回外层 | 按钮 → li → 列表容器 |
 
-D3 v7 的监听函数接收 (event, d)。event 描述点击和坐标；d 是元素绑定的数据。需要当前元素时可以用普通函数的 this，也可以用 event.currentTarget。
+默认监听器通常处理冒泡阶段。点击展开按钮时，事件也会传给外层的节点；如果节点还绑定了“选中”操作，就可能同时触发两个动作。`event.stopPropagation()` 可以阻止事件继续沿父元素传播。
 
-### 控制状态与冒泡
+### 事件委托与 classed
 
-classed(name, boolean) 切换类名；stopPropagation 阻止事件继续冒泡，但不会自动取消默认行为。事件委托把监听器放在父元素上，再用 closest 定位点击目标。
+事件委托把监听器放在列表容器上，再用 `event.target.closest(...)` 找到被点击的项目。`event.target` 是点击来源，`event.currentTarget` 是当前执行监听器的元素。
 
-### 关键代码: 事件与状态
+`selection.classed("selected", true)` 添加类，传入 `false` 移除类，传入函数则根据每条数据计算状态。用这种方式，数据状态和样式规则可以分开。
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+### 过渡动画
+
+`transition().duration(ms)` 让位置、颜色或透明度从旧值逐渐变化到新值。时长为 0 时立即切换；增加时长后，可以观察元素变化的过程。连续操作时，可先调用 `interrupt()` 终止已有过渡。
+
+### 关键代码
+
+#### 1. 展开按钮、选中与事件传播
+
+```javascript
+const item = d3.select('li');
+const toggle = item.select('button.toggle');
+toggle.on('click.toggle', function(event) {
+  event.stopPropagation(); // 不再触发外层 li 的点击监听器。
+  const open = this.getAttribute('aria-expanded') !== 'true';
+  this.setAttribute('aria-expanded', String(open));
+  item.classed('expanded', open);
+});
+// .select 是事件命名空间，便于单独替换或移除监听器。
+item.on('click.select', () => item.classed('selected', true));
+```
+
+**关键点解释**
+
+`click.toggle` 与 `click.select` 都监听 click，点号后的名字是 D3 的命名空间。点击按钮会先触发按钮监听器，再沿父元素冒泡；`stopPropagation` 阻断这次传播。它不等同于阻止默认动作的 `preventDefault`。
+
+#### 2. 递归生成嵌套列表
+
+```javascript
+function buildList(parent, nodes) {
+  const items = parent.selectAll('li').data(nodes, d => d.id).join('li');
+  items.each(function(d) {
+    const item = d3.select(this); // 原生 DOM 转回 D3 选择集。
+    item.selectAll('span.label').data([d]).join('span').attr('class', 'label').text(d => d.name);
+    const children = d.children ?? [];
+    const nested = item.selectAll('ul').data(children.length ? [children] : []).join('ul');
+    if (children.length) buildList(nested, children); // 子层重复同样步骤。
+  });
+}
+buildList(d3.select('#tree'), [rootData]);
+```
+
+**关键点解释**
+
+`each` 对每个选中元素执行一次函数，适合在每个节点内部继续构造子树。`[children]` 把整个子数组绑定给一个 ul，再在 ul 内把数组逐项绑定为 li。递归在没有 children 时结束。
+
+#### 3. transition 与 duration
+
+```javascript
+const nodes = svg.selectAll('circle.node');
+// 普通 attr 立即设置；transition 后的 attr 在一段时间内变化。
+nodes.interrupt().transition().duration(500)
+  .attr('cx', d => d.x).attr('cy', d => d.y).attr('opacity', 1);
+// 淡入：先给起始值，再定义终值。
+svg.append('circle').attr('r', 8).attr('opacity', 0)
+  .transition().duration(500).attr('opacity', 1);
+```
+
+**关键点解释**
+
+`duration` 的单位是毫秒。过渡从元素当前属性插值到新属性；先设置 opacity 为 0，再过渡到 1，得到淡入。快速重复操作时，`interrupt` 可以停止旧过渡，随后从当前显示状态开始新的过渡。
+
+#### 4. 用父容器做事件委托
+
+```javascript
+d3.select('#tree').on('click', function(event) {
+  const label = event.target.closest('.label'); // 从实际点击处向上找。
+  if (!label || !this.contains(label)) return;
+  const item = label.closest('li');
+  const datum = d3.select(item).datum();        // 读取 li 绑定的数据。
+  d3.select(this).selectAll('li').classed('selected', function() {
+    return this === item;
+  });
+  console.log(datum);
+});
+```
+
+**关键点解释**
+
+监听器只放在容器上，新增子项也能利用事件冒泡触发它。`target` 指最初点击的元素，普通函数的 `this` 指绑定监听器的容器；两者可能不同。`datum()` 不传参数时读取当前元素的数据。
+
+### 运行示例: 事件与状态
 
 ```javascript
 function events({svg,d3,n,L}) {
@@ -193,10 +385,6 @@ function events({svg,d3,n,L}) {
 }
 ```
 
-- **(event, d)**: event 是事件，d 是绑定的数据，不要颠倒。
-- **function / this**: 普通函数的 this 指向元素；箭头函数改用 currentTarget。
-- **classed(name, boolean)**: 布尔值决定添加还是移除类。
-- **transition().duration(350)**: 在 350 毫秒内插值属性；interrupt 防止快速点击时堆积旧过渡。
 
 [D3 官方文档](https://d3js.org/d3-selection/events)
 

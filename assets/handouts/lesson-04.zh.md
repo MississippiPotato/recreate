@@ -2,27 +2,63 @@
 
 表格结构、比例尺、曲线与标量场的表达。
 
-本讲义基于原课程与课程材料重新组织，配套网站保留“讲解 / 关键代码 / 演示”。示例中的学生、气温、场与事件为教学构造数据。
-
 ## 4.1 宽表与长表
 
-改的是表格结构，记录所代表的实体和观测含义要能追溯。
+### 宽表与长表
 
-### 两种形式
+原课程用美国各州的犯罪数据说明表格转换：一行代表一个州，多列分别记录不同指标。这是宽格式。把每个指标展开为一行，就得到长格式。
 
-宽表把指标放在多列，便于横向阅读；长表用字段名和数值两列表达指标，便于筛选、分组和数据连接。
+| 格式 | 一行代表什么 | 字段示例 |
+| --- | --- | --- |
+| 宽表 Wide | 一个实体 | state、murder、robbery、burglary |
+| 长表 Long | 一个实体的一个指标 | state、metric、value |
 
-### 保留联合标识
+### 为什么要转换
 
-一行宽表可以生成多行长表。用“实体编号 + 指标名”区分观测，避免行数增加后误认为新增了实体。
+宽表便于并排查看多个指标；长表便于按指标过滤、分组和绑定图形。原课程的热图用州名和指标名决定位置，用 value 决定颜色。
 
-### 从结构到语法
+### flatMap 与类型转换
 
-flatMap 把每条记录映射为多个观测，再展开一层。展开时明确列出指标，避免把编号、名称等元数据也当作数值。
+`flatMap` 先为每个实体生成一组指标记录，再展开一层数组。转换后保留实体标识和指标名，它们共同确定一个单元格。`d3.autoType` 可以自动转换常见类型；编号等有固定格式的字段也可以在行回调中显式处理。
 
-### 关键代码: flatMap 与联合标识
+### 关键代码
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+#### 1. 读入宽表与自动转换
+
+```javascript
+// autoType 是行转换函数，按单元格内容推断常见类型。
+const rows = [
+  {state:'A',murder:'12',robbery:'30'},
+  {state:'B',murder:'8',robbery:'25'}
+].map(row => d3.autoType({...row})); // 复制后转换，保留原始对象。
+console.log(typeof rows[0].murder); // 'number'
+// 在 CSV 中相同写法是：await d3.csv(url, d3.autoType)。
+```
+
+**关键点解释**
+
+`autoType` 接收行对象并转换它的值。`{...row}` 用展开语法复制一层对象，再交给转换函数。实际 CSV 加载时可以直接把 `d3.autoType` 作为行回调；若编号含前导零等格式含义，可以自行编写行回调保留该字段。
+
+#### 2. flatMap：宽表转长表
+
+```javascript
+const wide = [{state:'A',murder:12,robbery:30},{state:'B',murder:8,robbery:25}];
+const metrics = ['murder','robbery'];
+// 外层遍历实体，内层遍历字段，flatMap 展开内层数组。
+const long = wide.flatMap(row => metrics.map(metric => ({
+  state:row.state,
+  metric,
+  value:row[metric] // 方括号按变量中的字段名读取值。
+})));
+console.log(long.length); // 2×2 = 4
+const groups = d3.group(long,d=>d.metric);
+```
+
+**关键点解释**
+
+`row.metric` 会读取名叫 metric 的字段，`row[metric]` 才会使用变量里的字段名。内层 map 为一个州生成多条指标记录，外层 flatMap 把它们合成一个数组。实体名和指标名一起标识单元格。
+
+### 运行示例: flatMap 与联合标识
 
 ```javascript
 function reshape({svg,d3,n}) {
@@ -35,8 +71,6 @@ function reshape({svg,d3,n}) {
 }
 ```
 
-- **flatMap(callback)**: 每项返回一个数组，结果展开一层。
-- **{ id, field, value }**: 长表仍保留实体与指标。
 
 [D3 官方文档](https://d3js.org/d3-array/transform)
 
@@ -48,23 +82,68 @@ function reshape({svg,d3,n}) {
 
 ## 4.2 比例尺与坐标轴
 
-比例尺计算数据到像素的映射，坐标轴把这条映射标出来。
+### 数据空间、坐标系空间与屏幕空间
 
-### domain 与 range
+原课程用散点图说明坐标变换：数据中的数值先映射到绘图区域，再加上边距放到 SVG 中。点、线和坐标轴应使用相同的映射规则。
 
-domain 是输入数据范围，range 是输出位置范围。SVG 的 y 向下增加，因此纵轴通常把较大数值映射到较小的像素坐标。
+| 空间 | 内容 | 例子 |
+| --- | --- | --- |
+| 数据空间 | 原始字段值 | 人数 100、成绩 80 |
+| 坐标系空间 | 绘图区域内的坐标 | 0 到 innerWidth |
+| 屏幕空间 | 加入边距后的 SVG 坐标 | translate(margin.left, margin.top) |
 
-### 线性与对数
+### 选择比例尺
 
-线性尺度的等距表达相同差值；对数尺度的等距表达相同比值。普通对数尺度不能跨过零，改变尺度也不会改写原始值。
+| 比例尺 | 等距表示 | 常见用途 |
+| --- | --- | --- |
+| scaleLinear | 相同差值 | 普通数值轴 |
+| scaleLog | 相同比值 | 跨多个数量级的数据 |
+| scaleSqrt | 平方根变化 | 用圆的半径表达面积对应的数量 |
+| scaleBand | 离散类别的位置区间 | 柱状图类别轴 |
 
-### 坐标轴是生成器
+线性尺度上，1、10、100 的位置不等距；对数尺度上，相邻十倍数等距。改变比例尺后数据值保持不变，变化的是它们在屏幕上的距离。
 
-d3.axisBottom(scale) 创建生成器，再通过 selection.call(axis) 将刻度和标签加入 g。平移 g 用于安排边距，不需要改动数据。
+### 坐标轴的作用
 
-### 关键代码: 线性轴与对数轴
+`d3.axisBottom(x)` 根据 x 比例尺生成刻度和文字。坐标轴使用比例尺，图形也使用这个比例尺，二者就能保持对齐。
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+### 关键代码
+
+#### 1. 比例尺、边距与坐标轴
+
+```javascript
+const margin = {left:50,top:20,right:20,bottom:30};
+const innerW = 600-margin.left-margin.right;
+const innerH = 300-margin.top-margin.bottom;
+const x = d3.scaleLinear().domain([0,100]).range([0,innerW]);
+const y = d3.scaleLinear().domain([0,100]).range([innerH,0]);
+// 整组平移一次，组内使用绘图区域坐标。
+const plot = svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+plot.selectAll('circle').data(points).join('circle')
+  .attr('cx',d=>x(d.x)).attr('cy',d=>y(d.y)).attr('r',4);
+plot.append('g').attr('transform',`translate(0,${innerH})`).call(d3.axisBottom(x));
+```
+
+**关键点解释**
+
+比例尺输出绘图区域内的坐标，父组的 `translate` 负责边距。SVG 的 y 向下增加，因此 y 的 range 从 innerH 到 0。`call(axis)` 把选择集传给坐标轴生成器，生成器在这个 g 中添加刻度与文字。
+
+#### 2. 线性与对数的距离
+
+```javascript
+const linear = d3.scaleLinear().domain([1,1000]).range([0,500]);
+const log = d3.scaleLog().domain([1,1000]).range([0,500]);
+const values = [1,10,100,1000];
+console.table(values.map(value=>({value,linear:linear(value),log:log(value)})));
+// invert 做反向映射，常用于读取鼠标位置对应的数值。
+console.log(log.invert(250));
+```
+
+**关键点解释**
+
+线性尺度把相同差值画成相同距离；对数尺度把相同比值画成相同距离。这里相邻值都是前者的十倍，因此在 log 下等距。对数域需要同号且避开 0。`invert` 则把像素坐标转回数据值。
+
+### 运行示例: 线性轴与对数轴
 
 ```javascript
 function axis({svg,d3,n}) {
@@ -78,8 +157,6 @@ function axis({svg,d3,n}) {
 }
 ```
 
-- **scaleLog().domain([1,1000])**: 正数域中，相同倍数对应相同距离。
-- **axisBottom(x).ticks(...)**: ticks 是刻度数量的建议值，不是保证。
 
 [D3 官方文档](https://d3js.org/d3-axis)
 
@@ -91,23 +168,68 @@ function axis({svg,d3,n}) {
 
 ## 4.3 曲线连接与拟合
 
-采样点、插值线和拟合结果分别代表不同的信息。
+### 插值与拟合
 
-### 连线没有新增观测
+| 方法 | 目的 | 例子 |
+| --- | --- | --- |
+| 插值 Interpolation | 根据已有采样构造连接或中间值 | 折线、Catmull-Rom、Natural |
+| 拟合 Fitting | 用模型概括数据关系 | 线性回归、LOESS |
 
-采样点是已知数据。两点之间的连接方式是一种表达假设；画得平滑不说明真实过程也如此。
+原课程用 `d3.line().curve(...)` 切换曲线。它决定点之间怎样连接。部分曲线经过采样点，Basis 等曲线采用不同的平滑规则。最小二乘直线则通过最小化残差平方和求出一条模型直线。
 
-### 不同 curve 的约束
+### 常用曲线
 
-linear 使用折线，step 适合状态跳变，monotoneX 约束分段单调性。Catmull–Rom 和 Natural 经过采样点；Basis 通常不经过所有内部点。
+| 曲线 | 特点 | 适合观察 |
+| --- | --- | --- |
+| linear | 相邻点之间画直线 | 直接查看采样与变化 |
+| step / stepBefore / stepAfter | 以阶梯连接 | 状态切换与离散更新 |
+| monotoneX | 沿 x 方向保持相邻点间的单调性 | 避免相邻样本间新增局部极值 |
+| Catmull-Rom / natural | 经过采样点的平滑连接 | 比较曲线形状 |
+| basis | B 样条平滑 | 观察平滑规则对形状的影响 |
 
-### 插值与拟合不要混称
+### 保持采样点可见
 
-插值与平滑曲线着眼于连接方式；回归等拟合方法通过模型估计趋势。选择 d3.line().curve(...) 本身不等于完成统计回归。
+更换曲线时保留原始点，可以看清哪些位置来自观测、哪些形状来自连接规则。叠加拟合直线后，再比较它与采样点之间的残差。
 
-### 关键代码: line 生成器与 curve
+### 关键代码
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+#### 1. line、datum 与 curve
+
+```javascript
+const line = d3.line()
+  .x(d=>x(d.x)).y(d=>y(d.y)) // 访问器逐项取得像素坐标。
+  .curve(d3.curveCatmullRom.alpha(0.5));
+// 一个 path 接收整个点数组，所以使用 datum。
+svg.append('path').datum(points)
+  .attr('d',line).attr('fill','none').attr('stroke','#2878ad');
+// 同一组采样逐项绑定到圆，所以使用 data。
+svg.selectAll('circle').data(points).join('circle')
+  .attr('cx',d=>x(d.x)).attr('cy',d=>y(d.y)).attr('r',4);
+```
+
+**关键点解释**
+
+`datum(points)` 把数组整体绑定到一个元素；`data(points)` 把数组项逐个匹配到元素。`attr("d", line)` 调用 line 生成路径字符串。更换 curve 保留采样点和比例尺，只改变连接规则。
+
+#### 2. 最小二乘直线
+
+```javascript
+const meanX = d3.mean(points,d=>d.x), meanY = d3.mean(points,d=>d.y);
+const denominator = d3.sum(points,d=>(d.x-meanX)**2);
+if (!denominator) return; // 所有 x 相同时，不能求 y=ax+b 的唯一斜率。
+const a = d3.sum(points,d=>(d.x-meanX)*(d.y-meanY))/denominator;
+const b = meanY-a*meanX;
+const fitted = d3.extent(points,d=>d.x).map(x=>({x,y:a*x+b}));
+svg.append('path').datum(fitted)
+  .attr('d',d3.line().x(d=>x(d.x)).y(d=>y(d.y)))
+  .attr('fill','none').attr('stroke','#e16a45');
+```
+
+**关键点解释**
+
+直线模型是 `y = ax + b`。这里用中心化后的 x、y 计算斜率 a，再计算截距 b。`extent` 给出 x 的两端，算出两端的预测值即可画直线。与切换 curve 相比，这一步实际计算了模型参数。
+
+### 运行示例: line 生成器与 curve
 
 ```javascript
 function curves({svg,d3,n}) {
@@ -121,9 +243,6 @@ function curves({svg,d3,n}) {
 }
 ```
 
-- **datum(points)**: 将整个数组作为一条路径的数据。
-- **line.x(...).y(...)**: 访问器把每个采样映射到像素坐标。
-- **curve(...)**: 更换连接规则，采样点不变。
 
 [D3 官方文档](https://d3js.org/d3-shape/curve)
 
@@ -135,23 +254,59 @@ function curves({svg,d3,n}) {
 
 ## 4.4 纵横比与倾角感知
 
-同一组数值，画布的高宽变化也会改变人对“陡峭”的判断。
+### 纵横比与倾角感知
 
-### 屏幕斜率包含尺度
+同一组数值画在较矮的图中，线条显得平缓；画在较高的图中，线条显得陡峭。图形纵横比会改变视觉倾角，因此比较变化时要同时阅读坐标轴。
 
-屏幕上的斜率同时受数据差值、横轴范围、纵轴范围和画布尺寸影响。拉高画布会让线更陡，但数值增长率没有改变。
+### 45° 的设计启发
 
-### 45° 是设计启发
+原课程提出“平均倾斜度约为 45°”的安排。它来自折线图纵横比的设计研究，目的是让局部变化更容易比较。实际作图时，可以调整绘图区域高度，观察哪些变化被压平、哪些变化被夸大。
 
-适当安排平均倾角有助于比较局部变化，但不能把所有图都拉成 45°。任务、异常值、坐标范围和比较对象都应参与决定。
+### 数据斜率与屏幕斜率
 
-### 比较时统一条件
+数据中的斜率由 Δy / Δx 决定；屏幕上的斜率还乘上两个方向的像素缩放比例。只改变 y 比例尺的 `range`，就能在数据不变的情况下改变线条倾角。
 
-并排展示多条趋势时应交代坐标范围与纵横比。不同画布上看起来一样陡，不保证增长速度相同。
+本节可以保存 A 图，再改变 B 图的高度。比较两个视图中的同一段线，并核对对应的数值和坐标范围。
 
-### 关键代码: 用 range 改变画布倾角
+### 关键代码
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+#### 1. 用像素范围改变倾角
+
+```javascript
+const values = [2,4,3,6,8,7];
+const height = 180;
+const x = d3.scaleLinear().domain([0,values.length-1]).range([0,500]);
+const y = d3.scaleLinear().domain([0,10]).range([height,0]);
+const line = d3.line().x((d,i)=>x(i)).y(d=>y(d));
+// 保留数据和 domain，只改变纵向像素范围。
+y.range([height/2,0]);
+svg.append('path').datum(values).attr('d',line).attr('fill','none').attr('stroke','#2878ad');
+```
+
+**关键点解释**
+
+比例尺是函数对象，`y.range(...)` 会更新它的映射。line 的访问器在运行时调用 y，因此会使用新范围。同一段 Δy 被映射为更少的像素时，线条看起来更平缓。
+
+#### 2. 角度到屏幕坐标
+
+```javascript
+function lineAtAngle(degrees,length=240) {
+  const radians = degrees*Math.PI/180; // 三角函数使用弧度。
+  const origin = {x:60,y:260};
+  return {
+    x1:origin.x,y1:origin.y,
+    x2:origin.x+length*Math.cos(radians),
+    y2:origin.y-length*Math.sin(radians) // 向上需要减小 SVG y。
+  };
+}
+console.log(lineAtAngle(45));
+```
+
+**关键点解释**
+
+角度先乘 π/180 转为弧度。cos 给出水平分量，sin 给出竖直分量。数学坐标通常向上为正，SVG 则向下为正，因此这里使用负号。返回的四个值可以分别设置到 line 的 x1、y1、x2、y2。
+
+### 运行示例: 用 range 改变画布倾角
 
 ```javascript
 function aspect({svg,d3,n}) {
@@ -166,8 +321,6 @@ function aspect({svg,d3,n}) {
 }
 ```
 
-- **固定 domain**: 数值不变，先固定输入范围。
-- **range([175,...])**: 减小 y 像素值让数值向上绘制。
 
 [D3 官方文档](https://d3js.org/d3-scale/linear)
 
@@ -179,25 +332,65 @@ function aspect({svg,d3,n}) {
 
 ## 4.5 等值线：Marching Squares
 
-把一个网格单元的角点分类、边上插值和线段连接分开理解。
+### 标量场与等值线
 
-### 四个角产生 16 种状态
+标量场在空间中的每个位置对应一个数值，例如温度、海拔或密度。等值线连接取值相同的位置，把高于与低于某个阈值的区域分开。
 
-按左上、右上、右下、左下顺时针编号。本实现用 value ≥ threshold 判为高值，将四个布尔量编码为 0–15。编号约定不同，查表也应一致改变。
+### Marching Squares 的 16 种情况
 
-### 沿边计算交点
+把标量场采样为网格。每个单元有四个角，每个角根据是否达到阈值得到 0 或 1。四位二进制共有 2⁴ = 16 种组合，每种组合对应一种连线情况。
 
-一条边的两个端点分属高低两侧时，用 t=(threshold−a)/(b−a) 插值定位。等值线不是简单连接网格中心。
+- 给四个角确定编号，并使编码、查表和绘图使用相同顺序。
+- 检查每条边的两个端点，找出跨过阈值的边。
+- 在边上做线性插值，再连接相应的交点。
 
-### 鞍点存在歧义
+### 边插值与歧义
 
-交替高低的角点会产生两种连接方式。本实现根据双线性判别选择连接，并单独处理等于阈值的情况。三维 Marching Cubes 有 2⁸=256 种原始状态，不等于按对称性合并后的类别数。
+一条边的端点值为 v₀、v₁，阈值为 t 时，交点比例为 `(t − v₀) / (v₁ − v₀)`。交替高低的两种状态具有两种连接方式，本节演示可以切换处理方式，观察单元中心附近的连接变化。
+
+### D3 中的等值线
+
+`d3.contours` 接收按行展开的网格数值，输出 GeoJSON MultiPolygon。`size` 指网格列数与行数，`thresholds` 指等值，绘图时再把网格坐标映射为屏幕像素。
 
 ![讲义中的 Marching Squares 16 种情况。图中编号约定需与实现保持一致。](../figures/marching-squares-16.png)
 
-### 关键代码: d3.contours 的输入约定
+### 关键代码
 
-以下为网页中实际运行的语法示例函数；svg、d3、n、L 由示例运行环境传入，并非独立完整 HTML 文件。
+#### 1. 四个角的位编码与边插值
+
+```javascript
+// 本页顺序：左上、右上、右下、左下，对应位 1、2、4、8。
+const values = [8,2,7,1], threshold = 5;
+const code = values.reduce((bits,value,i)=>bits | ((value>=threshold ? 1 : 0)<<i),0);
+console.log(code); // 5，即二进制 0101。
+function crossing(v0,v1,t) {
+  return (t-v0)/(v1-v0); // 在确实跨越阈值的边上调用。
+}
+const fraction = crossing(values[0],values[1],threshold);
+console.log(fraction); // 左上到右上的相对位置。
+```
+
+**关键点解释**
+
+`&lt;&lt; i` 把 1 移到第 i 位，`|` 把各位合并为 0 到 15 的编号。编号依赖角点顺序，查表时必须使用同一约定。插值比例为 0 表示端点 v₀，为 1 表示端点 v₁；0.5 位于边的中间。
+
+#### 2. d3.contours：从网格到多边形
+
+```javascript
+const columns=12, rows=12;
+// values[y*columns+x]：先横向、再逐行。
+const values=d3.range(columns*rows).map(i=>Math.sin(i%columns/3)*Math.cos(Math.floor(i/columns)/3));
+const contours=d3.contours().size([columns,rows]).thresholds([0])(values);
+const path=d3.geoPath(d3.geoIdentity().scale(15)); // 网格单位转像素。
+svg.selectAll('path.contour').data(contours).join('path').attr('class','contour')
+  .attr('d',path).attr('fill','#b7dfdb').attr('stroke','#2878ad');
+```
+
+**关键点解释**
+
+`d3.contours()` 创建生成器，`size` 和 `thresholds` 配置它，最后的 `(values)` 执行计算。输出是等值区域的 MultiPolygon；`geoPath` 将多边形变为 path 字符串。这里的填充表示阈值区域，描边显示区域边界。
+
+### 运行示例: d3.contours 的输入约定
 
 ```javascript
 function contours({svg,d3,n}) {
@@ -211,9 +404,6 @@ function contours({svg,d3,n}) {
 }
 ```
 
-- **size([columns,rows])**: 这里是采样网格大小，不是像素尺寸。
-- **thresholds([value])**: 显式指定要提取的等值。
-- **geoIdentity().scale(15)**: 把网格坐标映射到绘图像素。
 
 [D3 官方文档](https://d3js.org/d3-contour/contour)
 

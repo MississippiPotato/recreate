@@ -7,9 +7,9 @@ export function mountClinic(host,{L,arrow,classroom=false}){
   const d3=window.d3;
   let current=0,baseline=76,palette='sequential',missing='zero',revealed=false;
   const cases=[
-    {name:L('坐标的障眼法','The axis illusion'),question:L('只多了 4，为什么看起来翻倍？','Only 4 more. Why does it look doubled?'),hint:L('两组教学数值为 80 与 84。拖动右图的纵轴起点，观察柱长比例。','The constructed values are 80 and 84. Change the right chart’s baseline and compare lengths.'),route:'#ch-4-2',related:L('继续学习：读懂坐标映射','Continue: reading a scale')},
-    {name:L('颜色的潜台词','Color’s hidden message'),question:L('学院名称，也有从小到大的顺序吗？','Do college names have a quantitative order?'),hint:L('四个学院各有 20 条合成记录。这里颜色只负责区分类别。试着消除深浅带来的排名暗示。','Each college has 20 synthetic records. Color only identifies categories. Remove the implied ranking.'),route:'#ch-3-2',related:L('继续学习：颜色表达什么','Continue: what color means')},
-    {name:L('消失的一天','The missing day'),question:L('那次“骤降”，真的发生了吗？','Did that sudden drop actually happen?'),hint:L('7 天的合成气温中，第 3 天没有记录。选择处理方式，看看“没测到”会被画成什么。','Day 3 of these seven synthetic temperatures has no reading. Change how missingness is represented.'),route:'#ch-5-1',related:L('继续学习：先读懂时间字段','Continue: temporal data')}
+    {name:L('坐标截断','Truncated axes'),question:L('只多了 4，为什么看起来翻倍？','Only 4 more. Why does it look doubled?'),hint:L('两组数值为 80 与 84。拖动右图的纵轴起点，观察柱长比例。','The values are 80 and 84. Change the right chart’s baseline and compare lengths.'),route:'#ch-4-2',related:L('继续学习：坐标映射','Continue: scales')},
+    {name:L('类别配色','Categorical colors'),question:L('学院名称，也有从小到大的顺序吗？','Do college names have a quantitative order?'),hint:L('四个学院各有 20 条记录。切换配色，观察颜色深浅是否暗示了排名。','Each college has 20 records. Switch palettes and inspect whether lightness suggests a ranking.'),route:'#ch-3-2',related:L('继续学习：颜色映射','Continue: color mapping')},
+    {name:L('缺失值','Missing values'),question:L('那次“骤降”，真的发生了吗？','Did that sudden drop actually happen?'),hint:L('7 天的气温中，第 3 天没有记录。选择处理方式，比较曲线的变化。','Day 3 of these seven temperatures has no reading. Compare ways to draw the missing value.'),route:'#ch-5-1',related:L('继续学习：时间字段','Continue: temporal data')}
   ];
   function render(){
     const item=cases[current];
@@ -40,7 +40,7 @@ export function mountClinic(host,{L,arrow,classroom=false}){
     names.forEach((name,i)=>{const x=135+i%2*230,y=85+Math.floor(i/2)*148;g.append('circle').attr('cx',x).attr('cy',y).attr('r',49).attr('fill',type==='categorical'?categorical[i]:d3.interpolatePurples(.28+i*.21));g.append('text').attr('x',x).attr('y',y+8).attr('text-anchor','middle').attr('font-size',24).attr('fill',type==='sequential'&&i===0?'#393351':'#fff').text('20');g.append('text').attr('x',x).attr('y',y+78).attr('text-anchor','middle').attr('font-size',17).attr('fill','#555a73').text(name);});
   }
   function temperatures(id,mode){
-    const g=canvas(id,L('七天合成气温，第 3 天缺失','Seven synthetic temperatures, day 3 missing')),x=d3.scaleLinear([0,6],[60,465]),y=d3.scaleLinear([0,26],[265,28]);
+    const g=canvas(id,L('七天气温，第 3 天缺失','Seven temperatures, day 3 missing')),x=d3.scaleLinear([0,6],[60,465]),y=d3.scaleLinear([0,26],[265,28]);
     g.append('g').attr('transform','translate(0,265)').call(d3.axisBottom(x).ticks(7).tickFormat(v=>v+1));g.append('g').attr('transform','translate(60,0)').call(d3.axisLeft(y).ticks(5).tickSize(-405));g.selectAll('.tick line').attr('stroke','#e5e7f0');g.selectAll('.domain').attr('stroke','#ccd0df');g.selectAll('.tick text').attr('font-size',15).attr('fill','#667378');
     const values=repairMissing(clinicTemperatures,mode),points=values.map((value,i)=>({value,i}));
     const line=d3.line().defined(d=>d.value!==null).x(d=>x(d.i)).y(d=>y(d.value));
